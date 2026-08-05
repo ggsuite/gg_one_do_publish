@@ -31,10 +31,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart';
 import 'package:pub_semver/pub_semver.dart';
 import 'package:test/test.dart';
-import 'package:gg_one_state/gg_one_state.dart';
+import 'package:gg_one_core/gg_one_core.dart';
 import 'package:gg_one_commit/gg_one_commit.dart';
 import 'package:gg_one_merge/gg_one_merge.dart';
-import 'package:gg_one_publish_config/gg_one_publish_config.dart';
 
 void main() {
   final messages = <String>[];

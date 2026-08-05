@@ -15,7 +15,7 @@ import 'package:gg_status_printer/gg_status_printer.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart';
 import 'package:test/test.dart';
-import 'package:gg_one_checks/gg_one_checks.dart';
+import 'package:gg_one_core/gg_one_core.dart';
 import 'package:gg_one_commit/gg_one_commit.dart';
 
 // .............................................................................

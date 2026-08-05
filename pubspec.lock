@@ -257,13 +257,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.1"
-  gg_one_checks:
-    dependency: "direct main"
-    description:
-      path: "../gg_one_checks"
-      relative: true
-    source: path
-    version: "1.0.0"
   gg_one_commit:
     dependency: "direct main"
     description:
@@ -271,24 +264,17 @@ packages:
       relative: true
     source: path
     version: "1.0.0"
+  gg_one_core:
+    dependency: "direct main"
+    description:
+      path: "../gg_one_core"
+      relative: true
+    source: path
+    version: "1.0.0"
   gg_one_merge:
     dependency: "direct main"
     description:
       path: "../gg_one_merge"
-      relative: true
-    source: path
-    version: "1.0.0"
-  gg_one_publish_config:
-    dependency: "direct main"
-    description:
-      path: "../gg_one_publish_config"
-      relative: true
-    source: path
-    version: "1.0.0"
-  gg_one_state:
-    dependency: "direct main"
-    description:
-      path: "../gg_one_state"
       relative: true
     source: path
     version: "1.0.0"
