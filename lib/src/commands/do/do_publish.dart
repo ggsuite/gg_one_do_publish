@@ -4,7 +4,7 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'package:gg_one_state/gg_one_state.dart';
+import 'package:gg_one_core/gg_one_core.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -24,8 +24,6 @@ import 'package:gg_publish/gg_publish.dart';
 import 'package:gg_version/gg_version.dart';
 import 'package:path/path.dart';
 import 'package:pub_semver/pub_semver.dart';
-import 'package:gg_one_checks/gg_one_checks.dart';
-import 'package:gg_one_publish_config/gg_one_publish_config.dart';
 import 'package:gg_one_commit/gg_one_commit.dart';
 import 'package:gg_one_merge/gg_one_merge.dart';
 

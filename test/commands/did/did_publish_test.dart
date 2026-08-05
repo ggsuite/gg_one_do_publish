@@ -10,7 +10,7 @@ import 'package:gg_git/gg_git_test_helpers.dart';
 import 'package:gg_log/gg_log.dart';
 import 'package:gg_one_do_publish/gg_one_do_publish.dart';
 import 'package:test/test.dart';
-import 'package:gg_one_state/gg_one_state.dart';
+import 'package:gg_one_core/gg_one_core.dart';
 
 void main() {
   late Directory d;
