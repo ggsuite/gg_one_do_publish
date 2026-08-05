@@ -4,9 +4,8 @@
 
 ### Added
 
-- Initial boilerplate.
+- The publish orchestrator of the gg_one tool family, extracted from gg_one: `DoPublish` with version bump, changelog, registry upload, merge, tags and resume, plus `CanPublish`, `DidPublish`, the workspace folder guard and the version tag tools.
 
 ### Changed
 
-- Reduce gg_one to the umbrella CLI; distribute behavior docs into the sub-packages
-- Merge gg_one_state, gg_one_checks and gg_one_publish_config into the new gg_one_core package
+- Rewrite the changelogs of the new packages for their initial release
