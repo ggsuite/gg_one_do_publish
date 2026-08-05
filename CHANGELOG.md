@@ -9,3 +9,4 @@
 ### Changed
 
 - Split gg_one into gg_one_core, gg_one_commit, gg_one_merge and gg_one_do_publish
+- Port the .gg/gg.json ignore guard from gg_one main into gg_one_core
