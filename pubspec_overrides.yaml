@@ -1,7 +1,0 @@
-dependency_overrides:
-  gg_one_core:
-    path: ../gg_one_core
-  gg_one_commit:
-    path: ../gg_one_commit
-  gg_one_merge:
-    path: ../gg_one_merge

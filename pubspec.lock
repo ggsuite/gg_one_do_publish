@@ -260,24 +260,27 @@ packages:
   gg_one_commit:
     dependency: "direct main"
     description:
-      path: "../gg_one_commit"
-      relative: true
-    source: path
-    version: "1.0.0"
+      name: gg_one_commit
+      sha256: e4bd9d65774cd387c569d677a684c71084f1696833f0cc6805d3c2b485e19298
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   gg_one_core:
     dependency: "direct main"
     description:
-      path: "../gg_one_core"
-      relative: true
-    source: path
-    version: "1.0.0"
+      name: gg_one_core
+      sha256: e0ecca5f387b1803330fa83bdc2485d4dd1f600b0d6368bd0c655198edc9df84
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   gg_one_merge:
     dependency: "direct main"
     description:
-      path: "../gg_one_merge"
-      relative: true
-    source: path
-    version: "1.0.0"
+      name: gg_one_merge
+      sha256: "6405aaf8d7b566237e4fd141da6b08a8605d6edbac0ab7c6393213deb2e1f1d6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   gg_process:
     dependency: "direct main"
     description:
