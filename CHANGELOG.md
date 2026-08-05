@@ -8,4 +8,4 @@
 
 ### Changed
 
-- Rewrite the changelogs of the new packages for their initial release
+- Split gg_one into gg_one_core, gg_one_commit, gg_one_merge and gg_one_do_publish
