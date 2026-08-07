@@ -1,6 +1,6 @@
 name: gg_one_do_publish
 description: "The publish orchestrator of the gg_one tool family - version bump, changelog, registry upload, merge, tags and resume."
-version: 1.0.1
+version: 1.0.2
 repository: https://github.com/ggsuite/gg_one_do_publish.git
 
 environment:
@@ -18,7 +18,7 @@ dependencies:
   gg_merge: ^2.1.1
   gg_one_commit: ^1.0.1
   gg_one_core: ^1.0.1
-  gg_one_merge: ^1.0.1
+  gg_one_merge: ^1.0.2
   gg_process: ^1.1.6
   gg_publish: ^3.10.2
   gg_status_printer: ^1.4.2
