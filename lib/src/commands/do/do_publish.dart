@@ -88,6 +88,7 @@ class DoPublish extends DirCommand<void> {
     DoConfigurePublish? configurePublish,
     EnsurePublishConfigIgnored? ensureIgnored,
     WaitUntilPublished? waitUntilPublished,
+    SyncHybridVersions? syncHybridVersions,
     // coverage:ignore-start
   }) : _canPublish = canPublish ?? CanPublish(ggLog: ggLog),
        _publishToPubDev = publish ?? Publish(ggLog: ggLog),
@@ -129,7 +130,9 @@ class DoPublish extends DirCommand<void> {
        _ensureIgnored =
            ensureIgnored ?? EnsurePublishConfigIgnored(ggLog: ggLog),
        _waitUntilPublished =
-           waitUntilPublished ?? WaitUntilPublished(ggLog: ggLog) {
+           waitUntilPublished ?? WaitUntilPublished(ggLog: ggLog),
+       _syncHybridVersions =
+           syncHybridVersions ?? SyncHybridVersions(ggLog: ggLog) {
     // coverage:ignore-end
     _addArgs();
   }
@@ -191,7 +194,7 @@ class DoPublish extends DirCommand<void> {
     bool? pana,
   }) async {
     final isVerbose = verbose ?? _verboseFromArgs;
-    final usePana = pana ?? _panaFromArgs;
+    var usePana = pana ?? _panaFromArgs;
     final isMergeOnly = mergeOnly ?? _mergeOnlyFromArgs;
     final isForce = force ?? _forceFromArgs;
     _publishedVersion ??= PublishedVersion(ggLog: ggLog);
@@ -422,6 +425,40 @@ class DoPublish extends DirCommand<void> {
       await progress.save(file: runtimeFile);
     }
 
+    // Step 5b: A hybrid carries two version numbers describing one artifact,
+    // and nothing keeps them together — they drift. Reconcile them to the
+    // higher one before anything reads a version, and commit the result so
+    // `did commit` inside `can publish` does not trip over the dirty manifest.
+    //
+    // A merge-only run releases nothing and therefore touches no version.
+    if (!isMergeOnly) {
+      final synced = await _syncHybridVersions.apply(
+        directory: directory,
+        ggLog: ggLog,
+      );
+
+      if (synced?.changed ?? false) {
+        await _commitVersionSync(
+          directory: directory,
+          ggLog: noLog,
+          version: synced!.version,
+        );
+
+        // The reconciled version has no CHANGELOG.md section yet, which pana
+        // rejects. Skipping it is what keeps such a publish possible at all —
+        // the alternative is an abort the user can only resolve by hand.
+        if (usePana) {
+          usePana = false;
+          ggLog(
+            cWarn(
+              'Publishing without pana: the manifests disagreed on the '
+              'version and were reconciled to ${synced.version}.',
+            ),
+          );
+        }
+      }
+    }
+
     // Step 6: Validate. The full `can publish` is skipped when resuming —
     // after a partial publish (version bumped, possibly merged) its checks
     // would fail although the remaining steps are perfectly resumable. But
@@ -518,14 +555,52 @@ class DoPublish extends DirCommand<void> {
     // registry visibility that follows it) is skipped entirely. No step is
     // marked as done either — the markers would let a later `gg do publish
     // --continue` believe the release already happened.
-    if (!isMergeOnly && !progress.isStepDone('publish_registry')) {
-      if (await _shouldPublishToRegistry(directory, ggLog)) {
-        final alreadyPublished = await _versionAlreadyPublished(
-          directory: directory,
-          ggLog: ggLog,
-        );
+    if (!isMergeOnly) {
+      final targets = await _publishTo.targets(directory);
 
-        if (!alreadyPublished) {
+      if (targets.isEmpty) {
+        // Skipping the registry must never be silent — a publish that ends
+        // without an upload looks successful otherwise.
+        ggLog(
+          cDetail(
+            'Not publishing to a registry: the manifests say '
+            '"${targets.label}". Only the version bump, merge and tag run.',
+          ),
+        );
+      } else {
+        // A leftover marker of an older gg cannot say which registry it
+        // reached, so it is re-checked rather than trusted — the lookup below
+        // happens anyway.
+        if (progress.hasLegacyRegistryStep) {
+          ggLog(
+            cDetail(
+              'Found a publish marker of an older gg version — '
+              're-checking each registry.',
+            ),
+          );
+        }
+
+        // Every registry gets its own marker: a run whose pub.dev upload
+        // succeeded before npm failed must resume at npm alone.
+        final open = <PublishTarget>{};
+        for (final target in targets.ordered) {
+          if (progress.isStepDone(publishRegistryStep(target))) {
+            continue;
+          }
+          if (await _versionAlreadyPublishedOn(
+            target: target,
+            directory: directory,
+            ggLog: ggLog,
+          )) {
+            // Nothing to upload, but the registry is settled — record it so a
+            // resume does not probe it again.
+            await markStepDone(publishRegistryStep(target));
+            continue;
+          }
+          open.add(target);
+        }
+
+        if (open.isNotEmpty) {
           final hashBeforePubDev = await _state.currentHash(
             directory: directory,
             ggLog: ggLog,
@@ -535,6 +610,10 @@ class DoPublish extends DirCommand<void> {
             directory: directory,
             ggLog: ggLog,
             askBeforePublishing: askBeforePublishing,
+            targets: open,
+            // Awaited between the uploads, so a registry that already accepted
+            // the version is on disk before the next one can fail.
+            onPublished: (target) => markStepDone(publishRegistryStep(target)),
           );
 
           await _commitLockFileIfChanged(
@@ -544,18 +623,7 @@ class DoPublish extends DirCommand<void> {
             verbose: isVerbose,
           );
         }
-      } else {
-        // Skipping the registry must never be silent — a publish that ends
-        // without an upload looks successful otherwise.
-        final target = await _publishTo.fromDirectory(directory);
-        ggLog(
-          cDetail(
-            'Not publishing to a registry: the manifest says '
-            '"$target". Only the version bump, merge and tag run.',
-          ),
-        );
       }
-      await markStepDone('publish_registry');
     }
 
     // Step 8b: Registries take a while to make a fresh upload visible. Wait
@@ -636,6 +704,7 @@ class DoPublish extends DirCommand<void> {
   }
 
   final Publish _publishToPubDev;
+  final SyncHybridVersions _syncHybridVersions;
   final CanPublish _canPublish;
   final GgState _state;
   final AddVersionTag _addVersionTag;
@@ -727,26 +796,37 @@ class DoPublish extends DirCommand<void> {
 
   /// Returns true when the current version is already visible on the
   /// registry, i.e. publishing it again is obsolete.
-  Future<bool> _versionAlreadyPublished({
+  Future<bool> _versionAlreadyPublishedOn({
+    required PublishTarget target,
     required Directory directory,
     required GgLog ggLog,
   }) async {
-    final currentVersion = await _fromPubspec.get(
-      directory: directory,
-      ggLog: <String>[].add,
-    );
+    // Read the version from the manifest that describes THIS registry. The
+    // two are equal after the reconciliation, but reading the right one keeps
+    // the check honest if a manual edit broke that.
+    final catalog = await LanguageCatalog.load();
+    final currentVersion = await target
+        .manifestIn(directory, catalog)
+        .readVersion();
+
     try {
       // Prereleases never become the registry's "latest" version, so they
       // must be looked up in the full version list instead.
       if (currentVersion.preRelease.isNotEmpty) {
-        final allVersions = await _publishedVersion!.allVersions(
-          directory: directory,
-          ggLog: <String>[].add,
-        );
+        // The null case is defensive: registryVersionsFor answers null only
+        // for a registry the package does not publish to, and this is called
+        // for its own targets.
+        final allVersions =
+            await _publishedVersion!.registryVersionsFor(
+              target: target,
+              directory: directory,
+            ) ??
+            const <Version>[]; // coverage:ignore-line
         return allVersions.contains(currentVersion);
       }
 
-      final publishedVersion = await _publishedVersion!.get(
+      final publishedVersion = await _publishedVersion!.latestVersionFor(
+        target: target,
         directory: directory,
         ggLog: <String>[].add,
       );
@@ -755,11 +835,44 @@ class DoPublish extends DirCommand<void> {
       // coverage:ignore-start
     } catch (e) {
       ggLog(cError('$e'));
-      ggLog(cDetail('Package probably not published on pub.dev'));
+      ggLog(cDetail('Package probably not published on ${target.id}'));
 
       return false;
     }
     // coverage:ignore-end
+  }
+
+  /// Commits the manifests the hybrid reconciliation rewrote.
+  ///
+  /// The hash is transplanted the way `_addNextVersion` does it, so the check
+  /// results recorded before the sync stay valid — otherwise `can publish`
+  /// would re-run every check on a purely mechanical edit.
+  Future<void> _commitVersionSync({
+    required Directory directory,
+    required GgLog ggLog,
+    required Version version,
+  }) async {
+    final hashBefore = await _state.currentHash(
+      directory: directory,
+      ggLog: ggLog,
+    );
+
+    await _state.updateHash(hash: hashBefore, directory: directory);
+
+    try {
+      await _commit.commit(
+        ggLog: ggLog,
+        directory: directory,
+        doStage: true,
+        message: '#gg: Sync manifest versions to $version',
+        ammendWhenNotPushed: false,
+      );
+    } on Exception catch (e) {
+      // A resumed run finds the sync already committed.
+      if (!e.toString().contains('Nothing to commit')) {
+        rethrow; // coverage:ignore-line
+      }
+    }
   }
 
   /// Prepare the next version and release the changelog.
@@ -771,7 +884,7 @@ class DoPublish extends DirCommand<void> {
     await _addNextVersion(directory, ggLog);
 
     // CHANGELOG.md release is Dart/Flutter only; TS uses manifest versioning.
-    if (_supportsChangeLog(directory)) {
+    if (await _supportsChangeLog(directory)) {
       await _prepareChangelog(
         directory: directory,
         ggLog: noLog,
@@ -780,13 +893,18 @@ class DoPublish extends DirCommand<void> {
     }
   }
 
-  /// Publishes to the package registry. Only called from the
-  /// `publish_registry` step after `_shouldPublishToRegistry` returned true —
-  /// registry-less targets are announced and skipped there.
+  /// Uploads to the registries in [targets]. Only called from the registry
+  /// step for the targets that are still open — registry-less packages are
+  /// announced and skipped there.
+  ///
+  /// [onPublished] is awaited after each registry accepted the upload, which
+  /// is what makes a partial failure resumable.
   Future<void> _publishToPubDevIfNeeded({
     required Directory directory,
     required GgLog ggLog,
     required bool? askBeforePublishing,
+    required Set<PublishTarget> targets,
+    required Future<void> Function(PublishTarget target) onPublished,
   }) async {
     final shouldAskBeforePublishing = await _shouldAskBeforePublishing(
       directory,
@@ -798,6 +916,8 @@ class DoPublish extends DirCommand<void> {
       directory: directory,
       ggLog: ggLog,
       askBeforePublishing: shouldAskBeforePublishing,
+      targets: targets,
+      onPublished: onPublished,
     );
   }
 
@@ -926,7 +1046,22 @@ class DoPublish extends DirCommand<void> {
       }
     }
 
-    if (_supportsChangeLog(directory)) {
+    // One tag covers both registries of a hybrid: the manifests are
+    // reconciled before the bump and bumped in lock-step. A manual edit that
+    // broke that would otherwise tag the release with one side's version and
+    // silently mislabel the other.
+    if (await hybridVersionsDiffer(directory)) {
+      throw Exception(
+        cError(
+          'pubspec.yaml and package.json carry different versions — '
+          'refusing to tag the release.',
+        ),
+      );
+    }
+
+    if (await _supportsChangeLog(directory)) {
+      // AddVersionTag enforces pubspec == CHANGELOG, which is exactly what a
+      // package with a pub.dev page needs.
       await _addVersionTag.exec(
         directory: directory,
         ggLog: (msg) => ggLog('✓ $msg'),
@@ -935,7 +1070,7 @@ class DoPublish extends DirCommand<void> {
     }
     final type = checkProjectType(directory);
     if (type == ProjectType.typescript) {
-      // Bridges tag from package.json too (published as TypeScript).
+      // npm-only, including an npm-only hybrid: tag from package.json.
       // ggLog with `✓` prefix is bound at construction time.
       await _addTypeScriptVersionTag.exec(directory: directory);
       return;
@@ -1028,7 +1163,7 @@ class DoPublish extends DirCommand<void> {
     // before it is released (gg sets »CHANGELOG.md merge=union«). Publishing
     // over such a section would silently swallow the »## Unreleased« entries.
     // Refuse right after the registry was asked, before anything is written.
-    if (_supportsChangeLog(directory)) {
+    if (await _supportsChangeLog(directory)) {
       await _throwIfNextVersionIsAlreadyInChangelog(
         directory: directory,
         ggLog: ggLog,
@@ -1174,9 +1309,8 @@ class DoPublish extends DirCommand<void> {
   ) async {
     askBeforePublishing ??= _askBeforePublishingFromParam;
 
-    final target = await _publishTo.fromDirectory(directory);
-    final publishToNone = target == 'none';
-    if (publishToNone) {
+    final targets = await _publishTo.targets(directory);
+    if (targets.isEmpty) {
       return false;
     }
 
@@ -1210,16 +1344,29 @@ class DoPublish extends DirCommand<void> {
     required int hashBefore,
     required bool verbose,
   }) async {
-    final lockFile = lockFileFor(directory);
-    final result = await _runProcess(
-      'git',
-      ['status', '--porcelain', lockFile],
-      directory: directory,
-      ggLog: ggLog,
-      verbose: verbose,
-    );
+    // A hybrid carries a lock file per ecosystem, and the publish can touch
+    // either of them.
+    final lockFiles = <String>[
+      if (File('${directory.path}/pubspec.yaml').existsSync()) 'pubspec.lock',
+      if (File('${directory.path}/package.json').existsSync())
+        detectTypeScriptPackageManager(directory).lockFile,
+    ];
 
-    if (result.stdout.toString().trim().isEmpty) {
+    final changed = <String>[];
+    for (final lockFile in lockFiles) {
+      final result = await _runProcess(
+        'git',
+        ['status', '--porcelain', lockFile],
+        directory: directory,
+        ggLog: ggLog,
+        verbose: verbose,
+      );
+      if (result.stdout.toString().trim().isNotEmpty) {
+        changed.add(lockFile);
+      }
+    }
+
+    if (changed.isEmpty) {
       return;
     }
 
@@ -1229,26 +1376,33 @@ class DoPublish extends DirCommand<void> {
       ggLog: ggLog,
       directory: directory,
       doStage: true,
-      message: '#gg: Update $lockFile',
+      message: '#gg: Update ${changed.join(', ')}',
       ammendWhenNotPushed: true,
     );
   }
 
-  /// Returns whether the package should be published to its registry
-  /// (pub.dev for Dart/Flutter, npm for TypeScript). Uses the language-aware
-  /// publish target instead of assuming a pubspec.yaml.
-  Future<bool> _shouldPublishToRegistry(
-    Directory directory,
-    GgLog ggLog,
-  ) async {
-    final target = await _publishTo.fromDirectory(directory);
-    return target == 'pub.dev' || target == 'npm';
-  }
-
   /// Whether [directory] uses the Dart/Flutter CHANGELOG.md based versioning
-  /// flow. TypeScript and other project types use a registry/manifest flow.
-  bool _supportsChangeLog(Directory directory) =>
-      checkProjectType(directory).isDartFamily;
+  /// flow. npm-only and manifest-less projects use a registry/manifest flow.
+  ///
+  /// A package without a `pubspec.yaml` never has it, and a plain Dart or
+  /// Flutter package always does — a `publish_to: none` one included, whose
+  /// CHANGELOG is still the human-facing release history.
+  ///
+  /// Only a *hybrid* is decided by its publish target: it used to resolve to
+  /// TypeScript wholesale, so its CHANGELOG.md was never released. One that
+  /// publishes to pub.dev now gets the Dart flow, because pub.dev shows the
+  /// CHANGELOG on the package page and pana scores it. An npm-only hybrid
+  /// keeps the TypeScript flow — it has no pub.dev page to fill.
+  Future<bool> _supportsChangeLog(Directory directory) async {
+    if (!detectProjectType(directory).isDartFamily) {
+      return false;
+    }
+    if (!isHybridProject(directory)) {
+      return true;
+    }
+    final targets = await _publishTo.targets(directory);
+    return targets.contains(PublishTarget.pubDev);
+  }
 
   /// Deletes the provided feature branch on the remote. Idempotent: the
   /// remote ref is looked up first, so a branch that is already gone (a

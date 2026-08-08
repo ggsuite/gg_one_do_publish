@@ -19,6 +19,7 @@ import 'package:args/command_runner.dart';
 import 'package:gg_console_colors/gg_console_colors.dart';
 import 'package:gg_direct_json/gg_direct_json.dart';
 import 'package:gg_git/gg_git.dart';
+import 'package:gg_lang/gg_lang.dart';
 import 'package:gg_git/gg_git_test_helpers.dart';
 import 'package:gg_log/gg_log.dart';
 import 'package:gg_merge/gg_merge.dart' as gg_merge;
@@ -115,6 +116,8 @@ void main() {
           directory: dMock(),
           ggLog: ggLog,
           askBeforePublishing: askBeforePublishing,
+          targets: any(named: 'targets'),
+          onPublished: any(named: 'onPublished'),
         ),
       ).thenAnswer((_) async {
         if (!success) {
@@ -125,15 +128,28 @@ void main() {
         }
       });
 
-  void mockPublishedVersion() =>
-      when(
-        () => publishedVersion.get(
-          directory: dMock(),
-          ggLog: any(named: 'ggLog'),
-        ),
-      ).thenAnswer((_) async {
-        return publishedVersionValue;
-      });
+  void mockPublishedVersion() {
+    when(
+      () => publishedVersion.get(
+        directory: dMock(),
+        ggLog: any(named: 'ggLog'),
+      ),
+    ).thenAnswer((_) async {
+      return publishedVersionValue;
+    });
+
+    // The registry safety net asks per registry, so the repo's single target
+    // has to answer the same version.
+    when(
+      () => publishedVersion.latestVersionFor(
+        target: any(named: 'target'),
+        directory: dMock(),
+        ggLog: any(named: 'ggLog'),
+      ),
+    ).thenAnswer((_) async {
+      return publishedVersionValue;
+    });
+  }
 
   void mockVersionSelector() =>
       when(
@@ -314,6 +330,8 @@ void main() {
       that: predicate<Directory>((x) => x.path == d.path),
     );
     registerFallbackValue(d);
+    registerFallbackValue(Version(0, 0, 0));
+    registerFallbackValue(PublishTarget.pubDev);
     publish = MockPublish();
     waitUntilPublished = MockWaitUntilPublished();
     when(
@@ -356,13 +374,21 @@ void main() {
       ], workingDirectory: d.path),
     ).thenAnswer((_) async => ProcessResult(0, 0, '', ''));
 
-    when(
-      () => processWrapper.run('git', [
-        'status',
-        '--porcelain',
-        'pubspec.lock',
-      ], workingDirectory: d.path),
-    ).thenAnswer((_) async => ProcessResult(0, 0, '', ''));
+    // A hybrid has one lock file per ecosystem, so both are looked at.
+    for (final lockFile in <String>[
+      'pubspec.lock',
+      'package-lock.json',
+      'pnpm-lock.yaml',
+      'yarn.lock',
+    ]) {
+      when(
+        () => processWrapper.run('git', [
+          'status',
+          '--porcelain',
+          lockFile,
+        ], workingDirectory: d.path),
+      ).thenAnswer((_) async => ProcessResult(0, 0, '', ''));
+    }
 
     // Default: a remote without pull-request support → local merge flow.
     when(
@@ -383,7 +409,6 @@ void main() {
     mockPublishedVersion();
 
     versionSelector = MockVersionSelector();
-    registerFallbackValue(Version(0, 0, 0));
     mockVersionSelector();
 
     // Instantiate with mocks
@@ -561,6 +586,8 @@ void main() {
                 directory: dMock(),
                 ggLog: ggLog,
                 askBeforePublishing: false,
+                targets: any(named: 'targets'),
+                onPublished: any(named: 'onPublished'),
               ),
             ).thenAnswer((_) async {
               await File(
@@ -858,6 +885,8 @@ void main() {
                   directory: any(named: 'directory'),
                   ggLog: any(named: 'ggLog'),
                   askBeforePublishing: any(named: 'askBeforePublishing'),
+                  targets: any(named: 'targets'),
+                  onPublished: any(named: 'onPublished'),
                 ),
               );
             });
@@ -2347,6 +2376,8 @@ void main() {
             directory: dMock(),
             ggLog: ggLog,
             askBeforePublishing: false,
+            targets: any(named: 'targets'),
+            onPublished: any(named: 'onPublished'),
           ),
         ).thenAnswer((_) async {
           markerPresentAtUpload = marker.existsSync();
@@ -2598,7 +2629,7 @@ void main() {
   "version_increment": "patch",
   "merge_message": "m",
   "branch": "feat_other",
-  "done_steps": ["prepare_version", "publish_registry"]
+  "done_steps": ["prepare_version", "publish_registry_pub_dev"]
 }
 ''';
 
@@ -2628,6 +2659,8 @@ void main() {
               directory: dMock(),
               ggLog: ggLog,
               askBeforePublishing: false,
+              targets: any(named: 'targets'),
+              onPublished: any(named: 'onPublished'),
             ),
           ).called(1);
           // The runtime file is removed after the successful publish.
@@ -2668,7 +2701,7 @@ void main() {
   "version_increment": "patch",
   "merge_message": "m",
   "branch": "feat_abc",
-  "done_steps": ["prepare_version", "publish_registry", "merge"]
+  "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
 }
 ''');
           stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
@@ -2746,7 +2779,7 @@ void main() {
   "version_increment": "patch",
   "merge_message": "m",
   "branch": "feat_abc",
-  "done_steps": ["prepare_version", "publish_registry", "merge"]
+  "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
 }
 ''');
         stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
@@ -2776,6 +2809,8 @@ void main() {
             directory: any<Directory>(named: 'directory'),
             ggLog: any<GgLog>(named: 'ggLog'),
             askBeforePublishing: any<bool>(named: 'askBeforePublishing'),
+            targets: any(named: 'targets'),
+            onPublished: any(named: 'onPublished'),
           ),
         );
         // The default branch was checked out and the tag added there.
@@ -2836,6 +2871,8 @@ void main() {
               directory: any<Directory>(named: 'directory'),
               ggLog: any<GgLog>(named: 'ggLog'),
               askBeforePublishing: any<bool>(named: 'askBeforePublishing'),
+              targets: any(named: 'targets'),
+              onPublished: any(named: 'onPublished'),
             ),
           );
           // Explicit parameters win over the runtime file values.
@@ -2859,7 +2896,7 @@ void main() {
   "version_increment": "patch",
   "merge_message": "m",
   "branch": "feat_other",
-  "done_steps": ["prepare_version", "publish_registry", "merge"]
+  "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
 }
 ''');
         stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
@@ -2910,7 +2947,7 @@ void main() {
   "merge_message": "m",
   "branch": "feat_other",
   "delete_feature_branch": true,
-  "done_steps": ["prepare_version", "publish_registry", "merge"]
+  "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
 }
 ''');
           stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
@@ -2955,7 +2992,7 @@ void main() {
   "version_increment": "patch",
   "merge_message": "m",
   "branch": "feat_other",
-  "done_steps": ["prepare_version", "publish_registry", "merge"]
+  "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
 }
 ''');
           stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
@@ -3082,7 +3119,7 @@ void main() {
   "version_increment": "patch",
   "merge_message": "m",
   "branch": "feat_abc",
-  "done_steps": ["prepare_version", "publish_registry", "merge"]
+  "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
 }
 ''');
         }
@@ -3371,6 +3408,8 @@ void main() {
             directory: any(named: 'directory'),
             ggLog: any(named: 'ggLog'),
             askBeforePublishing: any(named: 'askBeforePublishing'),
+            targets: any(named: 'targets'),
+            onPublished: any(named: 'onPublished'),
           ),
         );
         verifyNever(
@@ -3628,6 +3667,470 @@ void main() {
           throwsA(isA<Exception>()),
         );
         expect(captured, {panaOption: false});
+      });
+    });
+
+    // .......................................................................
+    group('for a hybrid (pubspec.yaml + package.json)', () {
+      late File runtimeFile;
+
+      AddVersionTag mockAddVersionTag() {
+        final tag = _MockAddVersionTag();
+        when(
+          () => tag.exec(
+            directory: any<Directory>(named: 'directory'),
+            ggLog: any<GgLog>(named: 'ggLog'),
+          ),
+        ).thenAnswer((_) async {});
+        return tag;
+      }
+
+      DoPublish makeResumePublish({SyncHybridVersions? syncHybridVersions}) =>
+          DoPublish(
+            syncHybridVersions: syncHybridVersions,
+            waitUntilPublished: waitUntilPublished,
+            ggLog: ggLog,
+            publish: publish,
+            prepareNextVersion: PrepareNextVersion(
+              ggLog: ggLog,
+              publishedVersion: publishedVersion,
+            ),
+            canPublish: canPublish,
+            isPublished: IsPublished(
+              ggLog: ggLog,
+              publishedVersion: publishedVersion,
+            ),
+            addVersionTag: mockAddVersionTag(),
+            configurePublish: makeConfigurePublish(
+              editMessage: (_) async =>
+                  fail('Editor must not open on a resumed run.'),
+            ),
+            publishedVersion: publishedVersion,
+            processWrapper: processWrapper,
+            localBranch: localBranch,
+            confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+            mergeFlow: noPubGetMergeFlow(),
+          );
+
+      void stubGit(List<String> args, {int exitCode = 0}) {
+        when(
+          () => processWrapper.run('git', args, workingDirectory: d.path),
+        ).thenAnswer((_) async => ProcessResult(0, exitCode, '', ''));
+      }
+
+      setUp(() {
+        runtimeFile = DoConfigurePublish.configFileFor(d);
+      });
+
+      /// Turns the fixture into a hybrid. [packageJsonVersion] drives the
+      /// reconciliation; [publishTo] takes the Dart side off pub.dev.
+      Future<void> makeHybrid({
+        String packageJsonVersion = '1.2.3',
+        String? publishTo,
+      }) async {
+        final pubspec = File(join(d.path, 'pubspec.yaml'));
+        var content = pubspec.readAsStringSync();
+        if (publishTo != null) {
+          content = '$content\npublish_to: $publishTo\n';
+        }
+        pubspec.writeAsStringSync(content);
+        File(join(d.path, 'package.json')).writeAsStringSync(
+          '{\n  "name": "@org/test",\n'
+          '  "version": "$packageJsonVersion"\n}\n',
+        );
+        // Commit everything — an untracked package.json leaves the tree dirty
+        // and »did commit« would refuse the resume.
+        await Process.run('git', ['add', '.'], workingDirectory: d.path);
+        await Process.run('git', [
+          'commit',
+          '-m',
+          'Add the node side',
+        ], workingDirectory: d.path);
+        await makeLastStateSuccessful();
+        messages.clear();
+      }
+
+      test('publishes to both registries and records both steps', () async {
+        // base_dna: no publish_to, no private — both registries are targets.
+        await makeHybrid();
+        publishedVersionValue = Version(1, 2, 3);
+        mockPublishedVersion();
+
+        final published = <PublishTarget>[];
+        when(
+          () => publish.exec(
+            directory: dMock(),
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            targets: any(named: 'targets'),
+            onPublished: any(named: 'onPublished'),
+          ),
+        ).thenAnswer((invocation) async {
+          final targets =
+              invocation.namedArguments[#targets] as Set<PublishTarget>;
+          final onPublished =
+              invocation.namedArguments[#onPublished]
+                  as Future<void> Function(PublishTarget);
+          for (final target in targets.toList()) {
+            published.add(target);
+            await onPublished(target);
+          }
+          publishedVersionValue = Version(1, 2, 4);
+        });
+
+        await doPublish.exec(
+          directory: d,
+          ggLog: ggLog,
+          askBeforePublishing: false,
+          deleteFeatureBranch: false,
+          message: 'Publish the hybrid',
+          versionIncrement: 'patch',
+        );
+
+        // Both registries were asked for, pub.dev first.
+        expect(published, [PublishTarget.pubDev, PublishTarget.npm]);
+        // Both manifests carry the bumped version.
+        expect(
+          File(join(d.path, 'pubspec.yaml')).readAsStringSync(),
+          contains('version: 1.2.4'),
+        );
+        expect(
+          File(join(d.path, 'package.json')).readAsStringSync(),
+          contains('"version": "1.2.4"'),
+        );
+      });
+
+      test('resumes at the registry that is still open', () async {
+        // The pub.dev upload succeeded before npm failed — a resume must not
+        // upload to pub.dev again.
+        await makeHybrid();
+        publishedVersionValue = Version(1, 2, 3);
+        mockPublishedVersion();
+        // Neither registry carries the version yet, so only the marker can
+        // keep pub.dev out of the resumed upload.
+        when(
+          () => publishedVersion.latestVersionFor(
+            target: any(named: 'target'),
+            directory: dMock(),
+            ggLog: any(named: 'ggLog'),
+          ),
+        ).thenAnswer((_) async => Version(1, 2, 2));
+
+        runtimeFile.writeAsStringSync('''
+{
+  "version_increment": "patch",
+  "merge_message": "m",
+  "branch": "feat_abc",
+  "delete_feature_branch": false,
+  "done_steps": ["prepare_version", "publish_registry_pub_dev"]
+}
+''');
+
+        Set<PublishTarget>? requested;
+        when(
+          () => publish.exec(
+            directory: dMock(),
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            targets: any(named: 'targets'),
+            onPublished: any(named: 'onPublished'),
+          ),
+        ).thenAnswer((invocation) async {
+          requested = invocation.namedArguments[#targets] as Set<PublishTarget>;
+          final onPublished =
+              invocation.namedArguments[#onPublished]
+                  as Future<void> Function(PublishTarget);
+          for (final target in requested!.toList()) {
+            await onPublished(target);
+          }
+        });
+
+        await makeResumePublish().exec(
+          directory: d,
+          ggLog: ggLog,
+          resume: true,
+          askBeforePublishing: false,
+          message: 'm',
+          versionIncrement: 'patch',
+        );
+
+        expect(requested, {PublishTarget.npm});
+      });
+
+      test('re-checks each registry after a legacy marker', () async {
+        // An older gg could not say which registry it reached.
+        await makeHybrid();
+        publishedVersionValue = Version(1, 2, 3);
+        mockPublishedVersion();
+
+        runtimeFile.writeAsStringSync('''
+{
+  "version_increment": "patch",
+  "merge_message": "m",
+  "branch": "feat_abc",
+  "delete_feature_branch": false,
+  "done_steps": ["prepare_version", "publish_registry"]
+}
+''');
+
+        // Both registries already carry the un-bumped version, so the safety
+        // net skips the upload without trusting the marker.
+        when(
+          () => publishedVersion.latestVersionFor(
+            target: any(named: 'target'),
+            directory: dMock(),
+            ggLog: any(named: 'ggLog'),
+          ),
+        ).thenAnswer((_) async => Version(1, 2, 3));
+
+        await makeResumePublish().exec(
+          directory: d,
+          ggLog: ggLog,
+          resume: true,
+          askBeforePublishing: false,
+          message: 'm',
+          versionIncrement: 'patch',
+        );
+
+        expect(
+          messages.join('\n'),
+          contains('publish marker of an older gg version'),
+        );
+        verifyNever(
+          () => publish.exec(
+            directory: any<Directory>(named: 'directory'),
+            ggLog: any<GgLog>(named: 'ggLog'),
+            askBeforePublishing: any<bool>(named: 'askBeforePublishing'),
+            targets: any(named: 'targets'),
+            onPublished: any(named: 'onPublished'),
+          ),
+        );
+      });
+
+      test('reconciles drifted versions and turns pana off', () async {
+        // The ds_dna shape: the two manifests disagree.
+        await makeHybrid(packageJsonVersion: '1.2.0');
+        publishedVersionValue = Version(1, 2, 3);
+        mockPublishedVersion();
+
+        // The same capture pattern the »--no-pana« tests use: stop right
+        // after »can publish« received its options.
+        late Map<String, dynamic> captured;
+        final capturingCanPublish = MockCanPublish();
+        when(
+          () => capturingCanPublish.exec(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+            options: any(named: 'options'),
+          ),
+        ).thenAnswer((invocation) async {
+          captured =
+              invocation.namedArguments[#options] as Map<String, dynamic>;
+          throw Exception('stop');
+        });
+
+        await expectLater(
+          DoPublish(
+            waitUntilPublished: waitUntilPublished,
+            ggLog: ggLog,
+            publish: publish,
+            canPublish: capturingCanPublish,
+            isPublished: IsPublished(
+              ggLog: ggLog,
+              publishedVersion: publishedVersion,
+            ),
+            configurePublish: makeConfigurePublish(),
+            publishedVersion: publishedVersion,
+            processWrapper: processWrapper,
+            localBranch: localBranch,
+            confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+            mergeFlow: noPubGetMergeFlow(),
+          ).exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+            message: 'm',
+            versionIncrement: 'patch',
+          ),
+          throwsA(isA<Exception>()),
+        );
+
+        final allMessages = messages.join('\n');
+        expect(allMessages, contains('carried different versions'));
+        expect(allMessages, contains('Publishing without pana'));
+        // pana is turned off for this run.
+        expect(captured[panaOption], isFalse);
+        // Both manifests now carry the higher version.
+        expect(
+          File(join(d.path, 'package.json')).readAsStringSync(),
+          contains('"version": "1.2.3"'),
+        );
+      });
+
+      test('looks a prerelease up in the full version list', () async {
+        // A prerelease never becomes a registry's »latest«, so the safety net
+        // has to scan the whole list instead of comparing against latest.
+        await makeHybrid(packageJsonVersion: '1.2.3');
+        publishedVersionValue = Version(1, 2, 3);
+        mockPublishedVersion();
+
+        runtimeFile.writeAsStringSync('''
+{
+  "version_increment": "patch",
+  "channel": "rc",
+  "merge_message": "m",
+  "branch": "feat_abc",
+  "delete_feature_branch": false,
+  "done_steps": ["prepare_version"]
+}
+''');
+        // The bump already happened, so both manifests carry the rc.
+        File(join(d.path, 'pubspec.yaml')).writeAsStringSync(
+          File(join(d.path, 'pubspec.yaml')).readAsStringSync().replaceFirst(
+            'version: 1.2.3',
+            'version: 1.2.4-rc.1',
+          ),
+        );
+        File(
+          join(d.path, 'package.json'),
+        ).writeAsStringSync('{"name": "@org/test", "version": "1.2.4-rc.1"}');
+        await Process.run('git', ['add', '.'], workingDirectory: d.path);
+        await Process.run('git', [
+          'commit',
+          '-m',
+          'Prepare the rc',
+        ], workingDirectory: d.path);
+        await makeLastStateSuccessful();
+        messages.clear();
+
+        // Both registries already carry the rc.
+        when(
+          () => publishedVersion.registryVersionsFor(
+            target: any(named: 'target'),
+            directory: dMock(),
+          ),
+        ).thenAnswer((_) async => [Version.parse('1.2.4-rc.1')]);
+
+        await makeResumePublish().exec(
+          directory: d,
+          ggLog: ggLog,
+          resume: true,
+          askBeforePublishing: false,
+          message: 'm',
+          versionIncrement: 'patch',
+          channel: 'rc',
+        );
+
+        // Nothing was uploaded — the rc is already on both registries.
+        verifyNever(
+          () => publish.exec(
+            directory: any<Directory>(named: 'directory'),
+            ggLog: any<GgLog>(named: 'ggLog'),
+            askBeforePublishing: any<bool>(named: 'askBeforePublishing'),
+            targets: any(named: 'targets'),
+            onPublished: any(named: 'onPublished'),
+          ),
+        );
+      });
+
+      test('tolerates an already committed reconciliation', () async {
+        // A resumed run finds the sync commit in place; committing nothing
+        // must not abort the publish.
+        await makeHybrid();
+        publishedVersionValue = Version(1, 2, 3);
+        mockPublishedVersion();
+        mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+
+        // Reports a change the working tree does not have.
+        final phantomSync = MockSyncHybridVersions();
+        when(
+          () => phantomSync.apply(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+          ),
+        ).thenAnswer((_) async => (version: Version(1, 2, 3), changed: true));
+
+        await DoPublish(
+          syncHybridVersions: phantomSync,
+          waitUntilPublished: waitUntilPublished,
+          ggLog: ggLog,
+          publish: publish,
+          prepareNextVersion: PrepareNextVersion(
+            ggLog: ggLog,
+            publishedVersion: publishedVersion,
+          ),
+          canPublish: canPublish,
+          isPublished: IsPublished(
+            ggLog: ggLog,
+            publishedVersion: publishedVersion,
+          ),
+          configurePublish: makeConfigurePublish(),
+          publishedVersion: publishedVersion,
+          processWrapper: processWrapper,
+          localBranch: localBranch,
+          confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+          mergeFlow: noPubGetMergeFlow(),
+        ).exec(
+          directory: d,
+          ggLog: ggLog,
+          askBeforePublishing: false,
+          deleteFeatureBranch: false,
+          message: 'm',
+          versionIncrement: 'patch',
+        );
+
+        expect(messages.join('\n'), contains('Publishing without pana'));
+      });
+
+      test('refuses to tag when the manifests still disagree', () async {
+        // Defensive guard: normally the reconciliation makes this impossible,
+        // so it is provoked by disabling the sync. Without it the release
+        // would be tagged with one side's version and mislabel the other.
+        await makeHybrid(packageJsonVersion: '9.9.9');
+        publishedVersionValue = Version(1, 2, 3);
+        mockPublishedVersion();
+        mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+
+        stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
+        stubGit(['checkout', 'main']);
+
+        final noSync = MockSyncHybridVersions();
+        when(
+          () => noSync.apply(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+          ),
+        ).thenAnswer((_) async => null);
+
+        runtimeFile.writeAsStringSync('''
+{
+  "version_increment": "patch",
+  "merge_message": "m",
+  "branch": "feat_abc",
+  "delete_feature_branch": false,
+  "done_steps": ["prepare_version", "publish_registry_pub_dev",
+                 "publish_registry_npm", "merge"]
+}
+''');
+
+        await expectLater(
+          makeResumePublish(syncHybridVersions: noSync).exec(
+            directory: d,
+            ggLog: ggLog,
+            resume: true,
+            askBeforePublishing: false,
+            message: 'm',
+            versionIncrement: 'patch',
+          ),
+          throwsA(
+            isA<Exception>().having(
+              (e) => rmControls(e.toString()),
+              'message',
+              contains('refusing to tag the release'),
+            ),
+          ),
+        );
       });
     });
 
