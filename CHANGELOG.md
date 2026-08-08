@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2.1.0 - 2026-08-08
 
 ### Added
 
 - `--no-pana` for `can publish` and `do publish`: skips the pana analysis. It
-  travels through the `options` map of `DirCommand.exec` (`panaOption`).
+travels through the `options` map of `DirCommand.exec` (`panaOption`).
 
 ## 2.0.0 - 2026-08-08
 
