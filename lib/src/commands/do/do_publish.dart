@@ -157,6 +157,7 @@ class DoPublish extends DirCommand<void> {
     bool? pr,
     bool? mergeOnly,
     bool? force,
+    Map<String, dynamic> options = const {},
   }) => get(
     directory: directory,
     ggLog: ggLog,

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Allow to pass custom options to exec of dir commands.
+
 ## 1.0.2 - 2026-08-07
 
 ### Fixed

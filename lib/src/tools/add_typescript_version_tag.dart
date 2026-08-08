@@ -24,7 +24,10 @@ class AddTypeScriptVersionTag {
 
   // ...........................................................................
   /// Reads `package.json` version and tags HEAD. Throws on `git tag` failure.
-  Future<void> exec({required Directory directory}) async {
+  Future<void> exec({
+    required Directory directory,
+    Map<String, dynamic> options = const {},
+  }) async {
     final version = _readPackageJsonVersion(directory);
     if (version == null) return;
 
