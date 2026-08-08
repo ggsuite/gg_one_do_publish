@@ -44,6 +44,7 @@ class AddGitOnlyVersionTag {
     required Directory directory,
     required VersionIncrement increment,
     ReleaseChannel channel = ReleaseChannel.stable,
+    Map<String, dynamic> options = const {},
   }) async {
     // Throw if not everything is committed.
     final isCommitted = await _isCommitted.get(
