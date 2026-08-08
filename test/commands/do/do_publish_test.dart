@@ -3542,6 +3542,95 @@ void main() {
       });
     });
 
+    group('--no-pana', () {
+      // The flag only decides what »can publish« is asked to do, so the check
+      // is where it arrives: the options map of its exec call.
+      Future<Map<String, dynamic>> panaOptionOf(List<String> args) async {
+        final mockCanPublish = MockCanPublish();
+        late Map<String, dynamic> captured;
+        when(
+          () => mockCanPublish.exec(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+            options: any(named: 'options'),
+          ),
+        ).thenAnswer((invocation) async {
+          captured =
+              invocation.namedArguments[#options] as Map<String, dynamic>;
+          // Nothing beyond this point is under test — stop the publish here.
+          throw Exception('stop');
+        });
+
+        final cliDoPublish = DoPublish(
+          waitUntilPublished: waitUntilPublished,
+          ggLog: ggLog,
+          publish: publish,
+          canPublish: mockCanPublish,
+          configurePublish: makeConfigurePublish(),
+          publishedVersion: publishedVersion,
+          processWrapper: processWrapper,
+          localBranch: localBranch,
+          confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+          mergeFlow: noPubGetMergeFlow(),
+        );
+
+        final runner = CommandRunner<void>('gg', 'gg')
+          ..addCommand(cliDoPublish);
+        await expectLater(
+          runner.run(<String>['publish', '-i', d.path, ...args]),
+          throwsA(isA<Exception>()),
+        );
+        return captured;
+      }
+
+      test('forwards pana: false to »can publish«', () async {
+        expect(await panaOptionOf(['--no-pana']), {panaOption: false});
+      });
+
+      test('forwards pana: true by default', () async {
+        expect(await panaOptionOf(<String>[]), {panaOption: true});
+      });
+
+      test('takes the value from the exec options', () async {
+        final mockCanPublish = MockCanPublish();
+        late Map<String, dynamic> captured;
+        when(
+          () => mockCanPublish.exec(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+            options: any(named: 'options'),
+          ),
+        ).thenAnswer((invocation) async {
+          captured =
+              invocation.namedArguments[#options] as Map<String, dynamic>;
+          throw Exception('stop');
+        });
+
+        final programmatic = DoPublish(
+          waitUntilPublished: waitUntilPublished,
+          ggLog: ggLog,
+          publish: publish,
+          canPublish: mockCanPublish,
+          configurePublish: makeConfigurePublish(),
+          publishedVersion: publishedVersion,
+          processWrapper: processWrapper,
+          localBranch: localBranch,
+          confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+          mergeFlow: noPubGetMergeFlow(),
+        );
+
+        await expectLater(
+          programmatic.exec(
+            directory: d,
+            ggLog: ggLog,
+            options: const <String, dynamic>{panaOption: false},
+          ),
+          throwsA(isA<Exception>()),
+        );
+        expect(captured, {panaOption: false});
+      });
+    });
+
     test('should have a code coverage of 100%', () {
       expect(
         DoPublish(
