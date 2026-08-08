@@ -171,6 +171,7 @@ class DoPublish extends DirCommand<void> {
     pr: pr,
     mergeOnly: mergeOnly,
     force: force,
+    pana: options[panaOption] as bool?,
   );
 
   @override
@@ -187,8 +188,10 @@ class DoPublish extends DirCommand<void> {
     bool? pr,
     bool? mergeOnly,
     bool? force,
+    bool? pana,
   }) async {
     final isVerbose = verbose ?? _verboseFromArgs;
+    final usePana = pana ?? _panaFromArgs;
     final isMergeOnly = mergeOnly ?? _mergeOnlyFromArgs;
     final isForce = force ?? _forceFromArgs;
     _publishedVersion ??= PublishedVersion(ggLog: ggLog);
@@ -443,7 +446,11 @@ class DoPublish extends DirCommand<void> {
         );
       }
     } else {
-      await _canPublish.exec(directory: directory, ggLog: ggLog);
+      await _canPublish.exec(
+        directory: directory,
+        ggLog: ggLog,
+        options: <String, dynamic>{panaOption: usePana},
+      );
     }
 
     // The final merge goes through an auto-merge pull request by default
@@ -1394,6 +1401,8 @@ class DoPublish extends DirCommand<void> {
 
   bool get _forceFromArgs => argResults?['force'] as bool? ?? false;
 
+  bool get _panaFromArgs => argResults?[panaOption] as bool? ?? true;
+
   bool get _prWasProvided => argResults?.wasParsed('pr') ?? false;
 
   String? get _messageFromArgs => argResults?['message'] as String?;
@@ -1420,6 +1429,13 @@ class DoPublish extends DirCommand<void> {
     argParser.addFlag(
       'delete-feature-branch',
       help: 'Delete the feature branch on origin',
+      defaultsTo: true,
+      negatable: true,
+    );
+
+    argParser.addFlag(
+      panaOption,
+      help: 'Run »dart run pana« as part of »can publish«.',
       defaultsTo: true,
       negatable: true,
     );

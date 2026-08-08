@@ -10,6 +10,19 @@ The package is part of the gg_one tool family (see the `gg_one` umbrella repo fo
 
 ## Behavior notes
 
+### `--no-pana`
+
+`can publish` and `do publish` both take `--no-pana` (pana runs by default). The
+flag is not a parameter of any `exec`/`get` — it travels in the `options` map of
+`DirCommand.exec` under the `panaOption` key, which `CommandCluster` hands to
+every command it runs. `CanPublish` fills the key in from its own
+`--[no-]pana` when the caller left it out, and `do publish` forwards its own
+flag as `{panaOption: <value>}` to `can publish`. `Pana` itself takes no
+options, so the skip lives in the `OptionalPana` wrapper `CanPublish` puts
+around it: with `pana: false` it logs »Skipping pana (--no-pana)« and returns.
+That keeps gg_multi's mocked `exec` calls matching — an extra named parameter
+would not.
+
 - **`did/`** — historical checks (was something done?): `did_commit`, `did_push`, `did_publish`, `did_upgrade`. `did publish` reads the hash-keyed `didPublish` state `do publish` records — »is what I have here released?« — under a **new** key name, because the legacy `doPublish` key is on `GgState.obsoleteKeys` and would be pruned on the next state write.
   - `do_publish` refuses to run in a **ticket workspace folder** (`tools/workspace_folder_guard.dart`: a directory that is no git repository — no `.git` folder or file — but holds a `ticket.json` or a `<ticket>.code-workspace`). Running it there would operate on a non-repository and fail with confusing git errors; the message points at `gg multi do publish`, which publishes the ticket's repositories in dependency order. The guard runs right after the directory check, before any other step, and has no `--force` escape — the folder is simply not a repository.
   - `do_publish` merges through an auto-merge pull request **by default** (`--pr`, GitHub and Azure DevOps): the PR is created with the merge message as title — or the one `gg_multi do review` already opened is reused, which keeps its review-time title while the merge message still becomes the squash commit message — set to auto-complete with the **squash** strategy (and the message as squash commit message), and the publish waits for the provider merge (`gg_merge`'s `WaitForMerge`, unbounded poll). Afterwards only tags are pushed. `--no-pr` restores the local merge + direct push to main; providers without PR support (e.g. self-hosted GitLab) fall back to the local merge with a warning. Enabling automerge is best-effort: a policy rejection leaves the PR open with a warning and the publish waits for a manual merge. The flow is resume-safe in two ways: pre-push-hook worktree drift (a »dart run« hook's implicit `pub get` rewriting `pubspec.lock` — gg installs no hooks itself, but a repo may carry one of its own) is committed and re-pushed so the final checkout of main never fails on a dirty tree, and when a resumed run finds all release content already on main (the PR of a crashed run was merged — detected via `git diff --name-only` against `origin/<main>`, ignoring `.gg/` and lock-file drift, because a squash merge defeats ancestry checks) the PR creation and wait are skipped entirely.
