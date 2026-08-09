@@ -269,18 +269,18 @@ packages:
     dependency: "direct main"
     description:
       name: gg_one_core
-      sha256: "80cdb7d1634468e7f3c2901208b8a7bd290a5a2bdffc74ed50845946408640e1"
+      sha256: e6badf30898f13ebd7848a8c9e84c834bef298bbe899386ca588e80fb6777707
       url: "https://pub.dev"
     source: hosted
-    version: "2.1.0"
+    version: "2.2.0"
   gg_one_merge:
     dependency: "direct main"
     description:
       name: gg_one_merge
-      sha256: fb4ab53f37cebc9dc73976a013e0015c606fe2acf59dcc2d165176092014463d
+      sha256: "3b8ab3a55b6d2e4444ffdb9d58784bd329d63d43b8de068a6243df380a085223"
       url: "https://pub.dev"
     source: hosted
-    version: "2.1.0"
+    version: "2.2.0"
   gg_process:
     dependency: "direct main"
     description:
@@ -301,10 +301,10 @@ packages:
     dependency: "direct main"
     description:
       name: gg_publish
-      sha256: "9d9485d98b4fa05c495e80f5eb97d33645278b8837ab45d5b6f58dbc22795804"
+      sha256: "34d2abb3219b85d321ab00c4a4dda00ec1f24711ff40464665ad6917a20bd069"
       url: "https://pub.dev"
     source: hosted
-    version: "4.1.0"
+    version: "4.2.0"
   gg_status_printer:
     dependency: "direct main"
     description:

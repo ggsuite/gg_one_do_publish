@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.3.0 - 2026-08-09
+
+### Changed
+
+- **`do publish` merges into main BEFORE it publishes.** The release order
+used to be upload first, merge second — a merge that was then refused left a
+version on pub.dev/npm that never reached main, and a registry cannot take an
+upload back. Now the `doCommit` and `didPublish` states are recorded
+immediately before the merge (the merge itself carries them into the default
+branch — in the pull-request flow the provider merges main, and gg cannot
+push a fix afterwards), the feature branch is merged into the default branch
+(and, without a pull request, main is pushed right away), and only then is
+the package uploaded to its registries — from the feature branch, whose
+content the merge made identical to main. A refused merge now stops the
+release while the registries are untouched; the merged-but-not-yet-uploaded
+state resumes with `--continue`.
+- After the upload the default branch is checked out to tag the release and
+push the tags, then the feature branch is checked out again and the workspace
+overrides (`pubspec_overrides.yaml` / `pnpm-workspace.yaml`) are restored
+from their `.gg/` backups — the repository keeps resolving against the
+sibling checkouts of its ticket workspace, so work simply continues. The
+restore re-records `didPublish` for the restored working tree; a merge-only
+run restores too but keeps recording nothing.
+- A resumed run whose merge already happened no longer pushes the feature
+branch at the start — the push had nothing to offer and would resurrect an
+already-deleted remote feature branch.
+- **The old main state never reaches the worktree.** The merge itself is
+checkout-free (see gg_one_merge: plumbing squash on the feature branch, ref
+fast-forward after a pull-request merge), the direct main push of the local
+flow moves the bare ref (`git push origin <main>`) instead of checking main
+out, and the `doPush` state is recorded before the merge — together with
+`doCommit`/`didPublish` — so it rides into main inside the squash. The only
+checkout of the whole publish is the tag step, and it switches to a main
+that already carries the release — content-identical to the feature branch
+— never to an old state whose changed files would make editor tooling
+descend on the worktree and rewrite lock files mid-release.
+- Merge in main before publishing
+
 ## 2.2.0 - 2026-08-09
 
 ### Changed
