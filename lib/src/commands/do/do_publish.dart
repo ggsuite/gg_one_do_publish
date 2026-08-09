@@ -563,19 +563,22 @@ class DoPublish extends DirCommand<void> {
     // yet uploaded state is resumable; an uploaded but not mergeable one
     // was not.
     if (!progress.isStepDone('merge')) {
-      // »doCommit« and »didPublish« are written immediately BEFORE the
-      // merge, so the merge itself carries them into the default branch —
-      // in the pull-request flow the provider merges main, and gg cannot
-      // push a fix afterwards. [GgState] hashes the tree and ignores
-      // `.gg/`, and a squash merge keeps the tree, so the hashes recorded
-      // here are exactly the hashes of the default branch after the merge.
-      // »doCommit« makes a later »gg did commit« accept the release commit;
-      // »didPublish« is read back by »gg did publish« and by the multi-repo
-      // flow. The registry upload that still has to happen is guarded by
-      // its own step markers — a run that dies between merge and upload is
-      // resumed with »--continue«, never restarted.
+      // »doCommit«, »doPush« and »didPublish« are written immediately
+      // BEFORE the merge, so the merge itself carries them into the default
+      // branch — in the pull-request flow the provider merges main, and gg
+      // cannot push a fix afterwards; in the local flow main is pushed as a
+      // bare ref below, without a checkout on which a state could be
+      // written. [GgState] hashes the tree and ignores `.gg/`, and a squash
+      // merge keeps the tree, so the hashes recorded here are exactly the
+      // hashes of the default branch after the merge. »doCommit« makes a
+      // later »gg did commit« accept the release commit; »doPush« keeps
+      // »gg did push« green on a fresh CI checkout of main; »didPublish« is
+      // read back by »gg did publish« and by the multi-repo flow. The
+      // registry upload that still has to happen is guarded by its own step
+      // markers — a run that dies between merge and upload is resumed with
+      // »--continue«, never restarted.
       //
-      // `ignoreUnstaged` — both states describe the *committed* release
+      // `ignoreUnstaged` — the states describe the *committed* release
       // content. [GgState] otherwise hashes untracked files as well, and a
       // publish runs build, test and packaging scripts: an artifact one of
       // them leaves behind for a moment would be hashed into the state
@@ -588,6 +591,11 @@ class DoPublish extends DirCommand<void> {
       await _state.writeSuccess(
         directory: directory,
         key: stateKeyDoCommit,
+        ignoreUnstaged: true,
+      );
+      await _state.writeSuccess(
+        directory: directory,
+        key: _doPush.stateKey,
         ignoreUnstaged: true,
       );
       if (!isMergeOnly) {
@@ -611,14 +619,13 @@ class DoPublish extends DirCommand<void> {
     // In the pull-request flow the provider already updated main when it
     // merged the PR. Otherwise the merge exists only locally so far — push
     // it NOW, before anything reaches a registry, so the release is durable
-    // on the remote first. Through DoPush.get, not raw gitPush: it writes
-    // the »doPush« success state into .gg/gg.json (amended into the release
-    // commit) before pushing, so »gg did push« passes on a fresh CI checkout
-    // of main. The doPush state carried over from the feature branch belongs
-    // to an older hash and would make CI red on every released package.
+    // on the remote first. The push moves the bare ref (»git push origin
+    // <main>«): the default branch is never checked out, so no editor
+    // tooling can descend on an old worktree state and rewrite lock files
+    // mid-release. The »doPush« state was recorded before the merge and
+    // rode into the default branch with it.
     if (!viaPullRequest) {
-      await _checkoutDefaultBranch(directory);
-      await _doPush.get(directory: directory, force: false, ggLog: noLog);
+      await _pushDefaultBranchRef(directory);
     }
 
     // The registry upload and its bookkeeping run on the FEATURE branch: the
@@ -1067,14 +1074,9 @@ class DoPublish extends DirCommand<void> {
     return true;
   }
 
-  /// Checks out the default branch (`main`/`master`): the merge commit to
-  /// push and the release commit to tag live there, not on the feature
-  /// branch HEAD may be on.
-  Future<void> _checkoutDefaultBranch(Directory directory) async {
-    final current = await _localBranch.get(
-      directory: directory,
-      ggLog: <String>[].add,
-    );
+  /// The name of the local default branch (`main`/`master`), or null when
+  /// the repository has neither.
+  Future<String?> _defaultBranchName(Directory directory) async {
     for (final candidate in ['main', 'master']) {
       final exists = await _processWrapper.run('git', [
         'rev-parse',
@@ -1082,23 +1084,64 @@ class DoPublish extends DirCommand<void> {
         '--quiet',
         'refs/heads/$candidate',
       ], workingDirectory: directory.path);
-      if (exists.exitCode != 0) {
-        continue;
+      if (exists.exitCode == 0) {
+        return candidate;
       }
-      if (current != candidate) {
-        final checkout = await _processWrapper.run('git', [
-          'checkout',
-          candidate,
-        ], workingDirectory: directory.path);
-        if (checkout.exitCode != 0) {
-          throw Exception(
-            cError('git checkout $candidate failed: ${checkout.stderr}'),
-          );
-        }
-        ggLog(cDetail('Checked out $candidate.'));
-      }
+    }
+    return null;
+  }
+
+  /// Pushes the local default branch to origin as a bare ref — WITHOUT
+  /// checking it out, so no editor tooling ever sees an old main state in
+  /// the worktree. Used by the local merge flow, whose squash commit exists
+  /// only locally until this push. Idempotent: an already-pushed ref is a
+  /// no-op ("Everything up-to-date").
+  Future<void> _pushDefaultBranchRef(Directory directory) async {
+    final branch = await _defaultBranchName(directory);
+    if (branch == null) {
       return;
     }
+
+    final result = await _processWrapper.run('git', [
+      'push',
+      'origin',
+      branch,
+    ], workingDirectory: directory.path);
+    if (result.exitCode != 0) {
+      throw Exception(
+        cError('git push origin $branch failed: ${result.stderr}'),
+      );
+    }
+    ggLog(cDetail('✓ Pushed $branch.'));
+  }
+
+  /// Checks out the default branch (`main`/`master`): the release commit to
+  /// tag lives there, not on the feature branch HEAD may be on. The only
+  /// place of the whole publish that checks the default branch out — and it
+  /// runs after the merge, so the worktree switches to content that is
+  /// identical to the feature branch, never to an old main state.
+  Future<void> _checkoutDefaultBranch(Directory directory) async {
+    final candidate = await _defaultBranchName(directory);
+    if (candidate == null) {
+      return;
+    }
+    final current = await _localBranch.get(
+      directory: directory,
+      ggLog: <String>[].add,
+    );
+    if (current == candidate) {
+      return;
+    }
+    final checkout = await _processWrapper.run('git', [
+      'checkout',
+      candidate,
+    ], workingDirectory: directory.path);
+    if (checkout.exitCode != 0) {
+      throw Exception(
+        cError('git checkout $candidate failed: ${checkout.stderr}'),
+      );
+    }
+    ggLog(cDetail('Checked out $candidate.'));
   }
 
   /// Checks out the feature branch [branchName] again. The merge and the tag

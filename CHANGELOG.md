@@ -26,6 +26,16 @@ run restores too but keeps recording nothing.
 - A resumed run whose merge already happened no longer pushes the feature
 branch at the start — the push had nothing to offer and would resurrect an
 already-deleted remote feature branch.
+- **The old main state never reaches the worktree.** The merge itself is
+checkout-free (see gg_one_merge: plumbing squash on the feature branch, ref
+fast-forward after a pull-request merge), the direct main push of the local
+flow moves the bare ref (`git push origin <main>`) instead of checking main
+out, and the `doPush` state is recorded before the merge — together with
+`doCommit`/`didPublish` — so it rides into main inside the squash. The only
+checkout of the whole publish is the tag step, and it switches to a main
+that already carries the release — content-identical to the feature branch
+— never to an old state whose changed files would make editor tooling
+descend on the worktree and rewrite lock files mid-release.
 - Merge in main before publishing
 
 ## 2.2.0 - 2026-08-09

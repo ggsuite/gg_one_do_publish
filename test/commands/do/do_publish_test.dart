@@ -368,10 +368,26 @@ void main() {
       return (result.stdout as String).trim();
     });
 
-    // The branch switches of the flow run through the injectable process
-    // wrapper. Delegate them to the real repository by default, so the
-    // integration tests actually change branches; tests that assert the
-    // checkout behavior itself override these stubs with fakes.
+    // The branch switches and the bare-ref push of the default branch run
+    // through the injectable process wrapper. Delegate them to the real
+    // repository by default, so the integration tests actually change
+    // branches and push; tests that assert the behavior itself override
+    // these stubs with fakes.
+    for (final branch in ['main', 'master']) {
+      when(
+        () => processWrapper.run('git', [
+          'push',
+          'origin',
+          branch,
+        ], workingDirectory: d.path),
+      ).thenAnswer(
+        (_) => Process.run('git', [
+          'push',
+          'origin',
+          branch,
+        ], workingDirectory: d.path),
+      );
+    }
     for (final branch in ['main', 'master', 'feat_abc', 'feat_other']) {
       when(
         () => processWrapper.run('git', [
@@ -2488,22 +2504,26 @@ void main() {
             deleteSourceBranch: any(named: 'deleteSourceBranch'),
           ),
         ).thenAnswer((_) async {
-          // The real pull-request flow ends with local main checked out at
-          // the merged state — the tag step that follows the upload relies
-          // on that. Emulate it with a local squash merge.
-          await Process.run('git', [
-            'checkout',
+          // The real pull-request flow ends with the local main REF moved
+          // to the merged state — without a checkout, HEAD stays on the
+          // feature branch. The tag step that follows the upload relies on
+          // the ref. Emulate it with the same plumbing the real flow uses.
+          final tree = await Process.run('git', [
+            'rev-parse',
+            'HEAD:',
+          ], workingDirectory: d.path);
+          final squash = await Process.run('git', [
+            'commit-tree',
+            (tree.stdout as String).trim(),
+            '-p',
             'main',
-          ], workingDirectory: d.path);
-          await Process.run('git', [
-            'merge',
-            '--squash',
-            'feat_abc',
-          ], workingDirectory: d.path);
-          await Process.run('git', [
-            'commit',
             '-m',
             'PR squash commit',
+          ], workingDirectory: d.path);
+          await Process.run('git', [
+            'update-ref',
+            'refs/heads/main',
+            (squash.stdout as String).trim(),
           ], workingDirectory: d.path);
         });
         when(
@@ -2741,6 +2761,49 @@ void main() {
 
         // Nothing was uploaded — a registry cannot take a version back,
         // while the merged-but-not-uploaded state is simply resumable.
+        verifyNever(
+          () => publish.exec(
+            directory: any<Directory>(named: 'directory'),
+            ggLog: any<GgLog>(named: 'ggLog'),
+            askBeforePublishing: any<bool>(named: 'askBeforePublishing'),
+            targets: any(named: 'targets'),
+            onPublished: any(named: 'onPublished'),
+          ),
+        );
+      });
+
+      test('throws when the push of the merged default branch fails — '
+          'before anything reaches a registry', () async {
+        mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+        when(
+          () => processWrapper.run('git', [
+            'push',
+            'origin',
+            'main',
+          ], workingDirectory: d.path),
+        ).thenAnswer((_) async => ProcessResult(0, 1, '', 'remote rejected'));
+
+        await expectLater(
+          () => doPublish.exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+          ),
+          throwsA(
+            isA<Exception>().having(
+              (e) => rmControls(e.toString()),
+              'message',
+              allOf(
+                contains('git push origin main failed'),
+                contains('remote rejected'),
+              ),
+            ),
+          ),
+        );
+
+        // The merge never became durable on the remote — so nothing was
+        // uploaded either.
         verifyNever(
           () => publish.exec(
             directory: any<Directory>(named: 'directory'),
@@ -3107,15 +3170,15 @@ void main() {
             onPublished: any(named: 'onPublished'),
           ),
         );
-        // The default branch was checked out twice — once to re-push the
-        // merged default branch, once for the tag step — and the tag was
-        // added there.
+        // The default branch was checked out exactly once — for the tag
+        // step; the main push moves the bare ref without a checkout. The
+        // tag was added there.
         verify(
           () => processWrapper.run('git', [
             'checkout',
             'main',
           ], workingDirectory: d.path),
-        ).called(2);
+        ).called(1);
         verify(
           () => tag.exec(
             directory: any<Directory>(named: 'directory'),
@@ -3465,6 +3528,7 @@ void main() {
           ], exitCode: 1);
           stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/master']);
           stubGit(['checkout', 'master']);
+          stubGit(['push', 'origin', 'master']);
 
           await makeResumePublish().exec(
             directory: d,
@@ -3473,13 +3537,14 @@ void main() {
             deleteFeatureBranch: false,
           );
 
-          // Once to push the merged default branch, once for the tag step.
+          // Exactly once — for the tag step; the main push moves the bare
+          // ref without a checkout.
           verify(
             () => processWrapper.run('git', [
               'checkout',
               'master',
             ], workingDirectory: d.path),
-          ).called(2);
+          ).called(1);
         });
 
         test('does not check out when already on the default branch', () async {
