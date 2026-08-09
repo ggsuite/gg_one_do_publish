@@ -152,7 +152,7 @@ class DoPublish extends DirCommand<void> {
 
   /// The key used to save the "all changes committed" state (read back by
   /// »gg did commit«, e.g. in CI).
-  final String stateKeyDoCommit = 'doCommit';
+  final String stateKeyDoCommit = GgState.doCommitKey;
 
   /// The key used to save the "this state is published" state (read back by
   /// »gg did publish« and by the multi-repo flow, which uses it to tell
