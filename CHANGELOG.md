@@ -6,6 +6,7 @@
 
 - Improve commit behavior
 - Answer gg did publish from git tags instead of a marker
+- Move the git and process plumbing to gg_git
 
 ## 2.3.0 - 2026-08-09
 

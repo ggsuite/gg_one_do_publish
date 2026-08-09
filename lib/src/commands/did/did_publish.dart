@@ -11,7 +11,6 @@ import 'package:gg_console_colors/gg_console_colors.dart';
 import 'package:gg_log/gg_log.dart';
 import 'package:gg_git/gg_git.dart';
 import 'package:gg_one_core/gg_one_core.dart';
-import 'package:gg_process/gg_process.dart';
 import 'package:gg_status_printer/gg_status_printer.dart';
 
 /// Is the current state published?
@@ -37,14 +36,14 @@ class DidPublish extends DirCommand<bool> {
     required super.ggLog,
     super.name = 'publish',
     super.description = 'Check if the current state was published',
-    GgProcessWrapper processWrapper = const GgProcessWrapper(),
-  }) : _processWrapper = processWrapper;
+    ProcessRunner? processRunner,
+  }) : _processRunner = processRunner ?? defaultProcessRunner;
 
   /// What the user is told when the answer is no.
   static const String suggestion =
       'Not published yet. Please run »gg do publish«.';
 
-  final GgProcessWrapper _processWrapper;
+  final ProcessRunner _processRunner;
 
   // ...........................................................................
   @override
@@ -92,9 +91,8 @@ class DidPublish extends DirCommand<bool> {
     // Raw, not trimmed: the porcelain columns are positional and a leading
     // space is meaningful (» M file« is modified but unstaged).
     final status = await _git(
-      directory,
       const ['status', '--porcelain', '--untracked-files=all'],
-      'read the working tree status',
+      directory,
       trimmed: false,
     );
     for (final entry in parseGitStatus(status)) {
@@ -112,9 +110,8 @@ class DidPublish extends DirCommand<bool> {
     // by comparing this tree against the last released one.
     final mainRef = await _defaultBranch(directory);
     final lastTag = await _git(
-      directory,
       <String>['describe', '--tags', '--abbrev=0', ?mainRef],
-      'find the last version tag',
+      directory,
       allowFailure: true,
     );
     if (lastTag.isEmpty) {
@@ -124,14 +121,14 @@ class DidPublish extends DirCommand<bool> {
 
     // Hash comparison, never file contents: git identifies a whole tree by
     // one object id, so identical content is a single string equality.
-    final releasedTree = await _git(directory, <String>[
+    final releasedTree = await _git(<String>[
       'rev-parse',
       '$lastTag^{tree}',
-    ], 'read the tree of $lastTag');
-    final currentTree = await _git(directory, const <String>[
+    ], directory);
+    final currentTree = await _git(const <String>[
       'rev-parse',
       'HEAD^{tree}',
-    ], 'read the tree of HEAD');
+    ], directory);
     if (releasedTree == currentTree) {
       return true;
     }
@@ -139,13 +136,13 @@ class DidPublish extends DirCommand<bool> {
     // The trees differ — list *which* entries, again by object id
     // (`diff-tree` compares hashes and never reads a file). gg's own files
     // may differ: the release bumps the version and rewrites lock files.
-    final changed = await _git(directory, <String>[
+    final changed = await _git(<String>[
       'diff-tree',
       '-r',
       '--name-only',
       lastTag,
       'HEAD',
-    ], 'compare the tree against $lastTag');
+    ], directory);
     for (final line in changed.split('\n')) {
       final file = line.trim();
       if (file.isEmpty || isGgOwnedPath(file)) {
@@ -159,6 +156,20 @@ class DidPublish extends DirCommand<bool> {
   }
 
   // ...........................................................................
+  Future<String> _git(
+    List<String> args,
+    Directory directory, {
+    bool allowFailure = false,
+    bool trimmed = true,
+  }) => runGit(
+    _processRunner,
+    args,
+    repoDir: directory,
+    allowFailure: allowFailure,
+    trimmed: trimmed,
+  );
+
+  // ...........................................................................
   /// The default branch to read the last release from — `origin/<main>`
   /// first, the local branch as fallback. Null when neither exists, which
   /// leaves `git describe` to answer for HEAD.
@@ -170,9 +181,8 @@ class DidPublish extends DirCommand<bool> {
       'master',
     ]) {
       final sha = await _git(
-        directory,
         <String>['rev-parse', '--verify', '--quiet', candidate],
-        'resolve $candidate',
+        directory,
         allowFailure: true,
       );
       if (sha.isNotEmpty) {
@@ -180,29 +190,6 @@ class DidPublish extends DirCommand<bool> {
       }
     }
     return null;
-  }
-
-  // ...........................................................................
-  Future<String> _git(
-    Directory directory,
-    List<String> arguments,
-    String description, {
-    bool allowFailure = false,
-    bool trimmed = true,
-  }) async {
-    final result = await _processWrapper.run(
-      'git',
-      arguments,
-      workingDirectory: directory.path,
-    );
-    if (result.exitCode != 0) {
-      if (allowFailure) {
-        return '';
-      }
-      throw Exception('Could not $description: ${result.stderr}');
-    }
-    final out = result.stdout.toString();
-    return trimmed ? out.trim() : out;
   }
 }
 

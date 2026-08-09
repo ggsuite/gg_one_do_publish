@@ -9,8 +9,6 @@ import 'dart:io';
 import 'package:gg_git/gg_git_test_helpers.dart';
 import 'package:gg_log/gg_log.dart';
 import 'package:gg_one_do_publish/gg_one_do_publish.dart';
-import 'package:gg_process/gg_process.dart';
-import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -160,18 +158,17 @@ void main() {
       });
 
       test('throws when git itself fails', () async {
-        final processWrapper = MockGgProcessWrapper();
-        when(
-          () => processWrapper.run(
-            'git',
-            any(),
-            workingDirectory: any(named: 'workingDirectory'),
-          ),
-        ).thenAnswer((_) async => ProcessResult(1, 1, '', 'git is unhappy'));
+        Future<ProcessResult> failingRunner(
+          String executable,
+          List<String> arguments, {
+          String? workingDirectory,
+          Map<String, String>? environment,
+          bool runInShell = true,
+        }) async => ProcessResult(1, 1, '', 'git is unhappy');
 
         final failing = DidPublish(
           ggLog: messages.add,
-          processWrapper: processWrapper,
+          processRunner: failingRunner,
         );
 
         await expectLater(
