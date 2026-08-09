@@ -84,7 +84,7 @@ class DoPublish extends DirCommand<void> {
     AddTypeScriptVersionTag? addTypeScriptVersionTag,
     AddGitOnlyVersionTag? addGitOnlyVersionTag,
     RemoveVersionTag? removeVersionTag,
-    Commit? commit,
+    GgSystemCommit? systemCommit,
     DoPush? doPush,
     DidCommit? didCommit,
     PrepareNextVersion? prepareNextVersion,
@@ -122,7 +122,7 @@ class DoPublish extends DirCommand<void> {
        // Like _addVersionTag: operates on the real repo, not through the
        // command's own process wrapper.
        _removeVersionTag = removeVersionTag ?? RemoveVersionTag(ggLog: ggLog),
-       _commit = commit ?? Commit(ggLog: ggLog),
+       _systemCommit = systemCommit ?? GgSystemCommit(ggLog: ggLog),
        _doPush = doPush ?? DoPush(ggLog: ggLog),
        _didCommit = didCommit ?? DidCommit(ggLog: ggLog),
        _prepareNextVersion =
@@ -799,7 +799,7 @@ class DoPublish extends DirCommand<void> {
   final AddGitOnlyVersionTag _addGitOnlyVersionTag;
   final RemoveVersionTag _removeVersionTag;
   final DoPush _doPush;
-  final Commit _commit;
+  final GgSystemCommit _systemCommit;
   final DidCommit _didCommit;
   final PrepareNextVersion _prepareNextVersion;
   final FromPubspec _fromPubspec;
@@ -946,20 +946,13 @@ class DoPublish extends DirCommand<void> {
 
     await _state.updateHash(hash: hashBefore, directory: directory);
 
-    try {
-      await _commit.commit(
-        ggLog: ggLog,
-        directory: directory,
-        doStage: true,
-        message: '#gg: Sync manifest versions to $version',
-        ammendWhenNotPushed: false,
-      );
-    } on Exception catch (e) {
-      // A resumed run finds the sync already committed.
-      if (!e.toString().contains('Nothing to commit')) {
-        rethrow; // coverage:ignore-line
-      }
-    }
+    // A resumed run finds the sync already committed; the system commit
+    // reports »nothing to do« instead of throwing.
+    await _systemCommit.commit(
+      ggLog: ggLog,
+      directory: directory,
+      message: '${ggCommitPrefix}Sync manifest versions to $version',
+    );
   }
 
   /// Prepare the next version and release the changelog.
@@ -1255,26 +1248,19 @@ class DoPublish extends DirCommand<void> {
 
     await _state.updateHash(hash: hashBefore, directory: directory);
 
-    try {
-      await _commit.commit(
-        ggLog: ggLog,
-        directory: directory,
-        doStage: true,
-        message: '#gg: Prepare changelog for release',
-        ammendWhenNotPushed: true,
-      );
-    } on Exception catch (e) {
-      // The changelog release is a no-op once the version already has a
-      // section in CHANGELOG.md — a run that bumped the version and released
-      // the changelog but died before the registry upload reaches exactly
-      // that state. Tolerate the empty commit like [_addNextVersion] does,
-      // otherwise the repair run cannot get past the step that is already
-      // done and the package is never published.
-      if (e.toString().contains('Nothing to commit')) {
-        reportLog('The changelog is already released — nothing to commit.');
-      } else {
-        rethrow;
-      }
+    // The changelog release is a no-op once the version already has a
+    // section in CHANGELOG.md — a run that bumped the version and released
+    // the changelog but died before the registry upload reaches exactly that
+    // state. The system commit reports »nothing to do« instead of throwing,
+    // so the repair run gets past the step that is already done.
+    final result = await _systemCommit.commit(
+      ggLog: ggLog,
+      directory: directory,
+      message: '${ggCommitPrefix}Prepare changelog for release',
+      ammendWhenNotPushed: true,
+    );
+    if (!result.systemCommitCreated) {
+      reportLog('The changelog is already released — nothing to commit.');
     }
   }
 
@@ -1335,23 +1321,16 @@ class DoPublish extends DirCommand<void> {
 
     final newVersion = await _fromPubspec.fromDirectory(directory: directory);
 
-    try {
-      await _commit.commit(
-        ggLog: ggLog,
-        directory: directory,
-        doStage: true,
-        message: '#gg: Finish development of version $newVersion',
-        ammendWhenNotPushed: false,
-      );
-    } on Exception catch (e) {
-      // When resuming after a failed publish, the version is already bumped
-      // and committed, so there is nothing left to commit. Tolerate the empty
-      // commit instead of crashing — this keeps »do publish« idempotent.
-      if (e.toString().contains('Nothing to commit')) {
-        ggLog('Version $newVersion is already prepared — nothing to commit.');
-      } else {
-        rethrow;
-      }
+    // When resuming after a failed publish, the version is already bumped
+    // and committed, so there is nothing left to commit — the system commit
+    // reports that instead of throwing, which keeps »do publish« idempotent.
+    final result = await _systemCommit.commit(
+      ggLog: ggLog,
+      directory: directory,
+      message: '${ggCommitPrefix}Finish development of version $newVersion',
+    );
+    if (!result.systemCommitCreated) {
+      ggLog('Version $newVersion is already prepared — nothing to commit.');
     }
   }
 
@@ -1522,11 +1501,13 @@ class DoPublish extends DirCommand<void> {
 
     await _state.updateHash(hash: hashBefore, directory: directory);
 
-    await _commit.commit(
+    // The lock files were determined above — hand them over as the pathspec
+    // so the commit really contains what its message names.
+    await _systemCommit.commit(
       ggLog: ggLog,
       directory: directory,
-      doStage: true,
-      message: '#gg: Update ${changed.join(', ')}',
+      message: '${ggCommitPrefix}Update ${changed.join(', ')}',
+      paths: changed,
       ammendWhenNotPushed: true,
     );
   }

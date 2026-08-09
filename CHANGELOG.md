@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Improve commit behavior
+
 ## 2.3.0 - 2026-08-09
 
 ### Changed

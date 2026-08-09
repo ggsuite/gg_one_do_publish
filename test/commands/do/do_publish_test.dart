@@ -2098,7 +2098,7 @@ void main() {
 
       // Builds a DoPublish whose version commit is driven by [commit], on a
       // TypeScript working tree (no CHANGELOG step).
-      Future<DoPublish> tsDoPublishWith(Commit commit) async {
+      Future<DoPublish> tsDoPublishWith(GgSystemCommit systemCommit) async {
         await File(join(d.path, 'pubspec.yaml')).delete();
         final changelog = File(join(d.path, 'CHANGELOG.md'));
         if (changelog.existsSync()) {
@@ -2124,7 +2124,7 @@ void main() {
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
           publish: publish,
-          commit: commit,
+          systemCommit: systemCommit,
           prepareNextVersion: PrepareNextVersion(
             ggLog: ggLog,
             publishedVersion: publishedVersion,
@@ -2147,18 +2147,28 @@ void main() {
         // Resuming after a failed publish: the version is already committed,
         // so the commit reports "Nothing to commit" — »do publish« must keep
         // going instead of crashing.
-        final commit = _MockCommit();
+        final systemCommit = MockGgSystemCommit();
         when(
-          () => commit.commit(
+          () => systemCommit.commit(
             ggLog: any(named: 'ggLog'),
             directory: any(named: 'directory'),
-            doStage: any(named: 'doStage'),
             message: any(named: 'message'),
+            paths: any(named: 'paths'),
+            includeUntracked: any(named: 'includeUntracked'),
             ammendWhenNotPushed: any(named: 'ammendWhenNotPushed'),
+            userCommitMessage: any(named: 'userCommitMessage'),
+            stateKey: any(named: 'stateKey'),
           ),
-        ).thenThrow(Exception('Nothing to commit. No uncommitted changes.'));
+        ).thenAnswer(
+          (_) async => const GgSystemCommitResult(
+            userCommitCreated: false,
+            systemCommitCreated: false,
+            ggOwnedPaths: [],
+            foreignPaths: [],
+          ),
+        );
 
-        final doPublish = await tsDoPublishWith(commit);
+        final doPublish = await tsDoPublishWith(systemCommit);
         messages.clear();
 
         // The downstream merge is not the subject here; we only assert the
@@ -2181,18 +2191,21 @@ void main() {
       });
 
       test('rethrows non-empty-commit failures during version bump', () async {
-        final commit = _MockCommit();
+        final systemCommit = MockGgSystemCommit();
         when(
-          () => commit.commit(
+          () => systemCommit.commit(
             ggLog: any(named: 'ggLog'),
             directory: any(named: 'directory'),
-            doStage: any(named: 'doStage'),
             message: any(named: 'message'),
+            paths: any(named: 'paths'),
+            includeUntracked: any(named: 'includeUntracked'),
             ammendWhenNotPushed: any(named: 'ammendWhenNotPushed'),
+            userCommitMessage: any(named: 'userCommitMessage'),
+            stateKey: any(named: 'stateKey'),
           ),
         ).thenThrow(Exception('disk full'));
 
-        final doPublish = await tsDoPublishWith(commit);
+        final doPublish = await tsDoPublishWith(systemCommit);
         messages.clear();
 
         late String exception;
@@ -2212,9 +2225,9 @@ void main() {
     });
 
     group('changelog step idempotency (Dart project)', () {
-      // Builds a DoPublish whose commits are driven by [commit], on a Dart
-      // working tree — so the CHANGELOG step runs.
-      Future<DoPublish> dartDoPublishWith(Commit commit) async {
+      // Builds a DoPublish whose commits are driven by [systemCommit], on
+      // a Dart working tree — so the CHANGELOG step runs.
+      Future<DoPublish> dartDoPublishWith(GgSystemCommit systemCommit) async {
         await makeLastStateSuccessful();
         mockPublishIsSuccessful(success: true, askBeforePublishing: false);
         publishedVersionValue = Version(1, 2, 3);
@@ -2224,7 +2237,7 @@ void main() {
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
           publish: publish,
-          commit: commit,
+          systemCommit: systemCommit,
           prepareNextVersion: PrepareNextVersion(
             ggLog: ggLog,
             publishedVersion: publishedVersion,
@@ -2249,18 +2262,28 @@ void main() {
         // release is then a no-op, so its commit reports "Nothing to commit"
         // — »do publish« must continue to the upload instead of crashing,
         // otherwise the package can never be published.
-        final commit = _MockCommit();
+        final systemCommit = MockGgSystemCommit();
         when(
-          () => commit.commit(
+          () => systemCommit.commit(
             ggLog: any(named: 'ggLog'),
             directory: any(named: 'directory'),
-            doStage: any(named: 'doStage'),
             message: any(named: 'message'),
+            paths: any(named: 'paths'),
+            includeUntracked: any(named: 'includeUntracked'),
             ammendWhenNotPushed: any(named: 'ammendWhenNotPushed'),
+            userCommitMessage: any(named: 'userCommitMessage'),
+            stateKey: any(named: 'stateKey'),
           ),
-        ).thenThrow(Exception('Nothing to commit. No uncommitted changes.'));
+        ).thenAnswer(
+          (_) async => const GgSystemCommitResult(
+            userCommitCreated: false,
+            systemCommitCreated: false,
+            ggOwnedPaths: [],
+            foreignPaths: [],
+          ),
+        );
 
-        final doPublish = await dartDoPublishWith(commit);
+        final doPublish = await dartDoPublishWith(systemCommit);
         messages.clear();
 
         // The downstream merge is not the subject here; we only assert the
@@ -2283,28 +2306,35 @@ void main() {
       });
 
       test('rethrows non-empty-commit failures during changelog', () async {
-        final commit = _MockCommit();
+        final systemCommit = MockGgSystemCommit();
         var callCount = 0;
         when(
-          () => commit.commit(
+          () => systemCommit.commit(
             ggLog: any(named: 'ggLog'),
             directory: any(named: 'directory'),
-            doStage: any(named: 'doStage'),
             message: any(named: 'message'),
+            paths: any(named: 'paths'),
+            includeUntracked: any(named: 'includeUntracked'),
             ammendWhenNotPushed: any(named: 'ammendWhenNotPushed'),
+            userCommitMessage: any(named: 'userCommitMessage'),
+            stateKey: any(named: 'stateKey'),
           ),
         ).thenAnswer((_) async {
-          // The version commit is tolerated, the changelog commit fails for
-          // an unrelated reason and must surface.
+          // The version commit finds nothing to do, the changelog commit
+          // fails for an unrelated reason and must surface.
           callCount++;
-          throw Exception(
-            callCount == 1
-                ? 'Nothing to commit. No uncommitted changes.'
-                : 'disk full',
-          );
+          if (callCount == 1) {
+            return const GgSystemCommitResult(
+              userCommitCreated: false,
+              systemCommitCreated: false,
+              ggOwnedPaths: [],
+              foreignPaths: [],
+            );
+          }
+          throw Exception('disk full');
         });
 
-        final doPublish = await dartDoPublishWith(commit);
+        final doPublish = await dartDoPublishWith(systemCommit);
         messages.clear();
 
         await expectLater(
@@ -4566,7 +4596,5 @@ void main() {
 class MockGgProcessWrapper extends Mock implements GgProcessWrapper {}
 
 class MockLocalBranch extends Mock implements LocalBranch {}
-
-class _MockCommit extends Mock implements Commit {}
 
 class _MockAddVersionTag extends Mock implements AddVersionTag {}
