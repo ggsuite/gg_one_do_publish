@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.0 - 2026-08-09
+
+### Changed
+
+- Improve commit behavior
+- Answer gg did publish from git tags instead of a marker
+- Move the git and process plumbing to gg_git
+- Record the doCommit state in system commits again
+
 ## 2.3.0 - 2026-08-09
 
 ### Changed
