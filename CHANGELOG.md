@@ -5,6 +5,7 @@
 ### Changed
 
 - Improve commit behavior
+- Answer gg did publish from git tags instead of a marker
 
 ## 2.3.0 - 2026-08-09
 

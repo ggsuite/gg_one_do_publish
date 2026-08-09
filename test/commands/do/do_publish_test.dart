@@ -578,11 +578,14 @@ void main() {
                           isTrue,
                         );
 
+                        // »gg did publish« reads the tags now.
+                        final why = <String>[];
                         expect(
                           await DidPublish(
-                            ggLog: ggLog,
-                          ).get(directory: d, ggLog: ggLog),
+                            ggLog: why.add,
+                          ).get(directory: d, ggLog: why.add),
                           isTrue,
+                          reason: why.join('\n'),
                         );
 
                         // Did the publish wait for the version to become
@@ -2694,7 +2697,7 @@ void main() {
         expect(mergedAtUpload, isTrue);
       });
 
-      test('records didPublish and doCommit before the merge, so the '
+      test('records doCommit and doPush before the merge, so the '
           'merge itself carries them into main', () async {
         mockPublishIsSuccessful(success: true, askBeforePublishing: false);
 
@@ -2714,10 +2717,11 @@ void main() {
         ], workingDirectory: d.path);
         final json =
             jsonDecode(committed.stdout as String) as Map<String, dynamic>;
-        expect(json.containsKey('didPublish'), isTrue);
         expect(json.containsKey('doCommit'), isTrue);
+        expect(json.containsKey('doPush'), isTrue);
 
-        // And »gg did publish« answers yes on the default branch.
+        // »gg did publish« needs no recorded marker — it reads the tag the
+        // release just created.
         await Process.run('git', [
           'checkout',
           'main',

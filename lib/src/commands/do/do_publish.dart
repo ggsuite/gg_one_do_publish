@@ -30,7 +30,7 @@ import 'package:gg_one_merge/gg_one_merge.dart';
 /// Publishes the current directory.
 ///
 /// The release order is: merge FIRST, upload SECOND. After the version bump
-/// the »doCommit« and »didPublish« states are recorded immediately before
+/// the »doCommit« and »doPush« states are recorded immediately before
 /// the merge (so the merge carries them into the default branch), the
 /// feature branch is merged into the default branch, and only then is the
 /// package uploaded to its registries — from the feature branch, whose
@@ -157,7 +157,6 @@ class DoPublish extends DirCommand<void> {
   /// The key used to save the "this state is published" state (read back by
   /// »gg did publish« and by the multi-repo flow, which uses it to tell
   /// released repos from ones that still carry unpublished work).
-  final String stateKeyDidPublish = 'didPublish';
 
   @override
   Future<void> exec({
@@ -563,7 +562,7 @@ class DoPublish extends DirCommand<void> {
     // yet uploaded state is resumable; an uploaded but not mergeable one
     // was not.
     if (!progress.isStepDone('merge')) {
-      // »doCommit«, »doPush« and »didPublish« are written immediately
+      // »doCommit« and »doPush« are written immediately
       // BEFORE the merge, so the merge itself carries them into the default
       // branch — in the pull-request flow the provider merges main, and gg
       // cannot push a fix afterwards; in the local flow main is pushed as a
@@ -572,9 +571,9 @@ class DoPublish extends DirCommand<void> {
       // merge keeps the tree, so the hashes recorded here are exactly the
       // hashes of the default branch after the merge. »doCommit« makes a
       // later »gg did commit« accept the release commit; »doPush« keeps
-      // »gg did push« green on a fresh CI checkout of main; »didPublish« is
-      // read back by »gg did publish« and by the multi-repo flow. The
-      // registry upload that still has to happen is guarded by its own step
+      // »gg did push« green on a fresh CI checkout of main. »gg did
+      // publish« needs no marker — it reads the tags. The registry upload
+      // that still has to happen is guarded by its own step
       // markers — a run that dies between merge and upload is resumed with
       // »--continue«, never restarted.
       //
@@ -585,9 +584,6 @@ class DoPublish extends DirCommand<void> {
       // without ever being committed, and »gg did commit« / »gg did
       // publish« would fail the instant it is gone again. Real uncommitted
       // work still fails those checks, which read the full working tree.
-      //
-      // A merge-only run records no »didPublish« — it releases nothing, so
-      // marking it published would be a lie.
       await _state.writeSuccess(
         directory: directory,
         key: stateKeyDoCommit,
@@ -598,13 +594,6 @@ class DoPublish extends DirCommand<void> {
         key: _doPush.stateKey,
         ignoreUnstaged: true,
       );
-      if (!isMergeOnly) {
-        await _state.writeSuccess(
-          directory: directory,
-          key: stateKeyDidPublish,
-          ignoreUnstaged: true,
-        );
-      }
 
       await _merge(
         directory: directory,
@@ -756,18 +745,6 @@ class DoPublish extends DirCommand<void> {
           '$pubspecOverridesBackupPath.',
         ),
       );
-
-      // The restored overrides are part of the working tree again, so the
-      // »didPublish« hash recorded before the merge no longer matches it.
-      // Re-record the state for the restored workspace, so »gg did publish«
-      // keeps answering yes for exactly the content the user continues
-      // working on. A merge-only run recorded nothing and keeps it that way.
-      if (!isMergeOnly) {
-        await _state.writeSuccess(
-          directory: directory,
-          key: stateKeyDidPublish,
-        );
-      }
     }
 
     // Step 12: Delete the feature branch. The decision was resolved up
