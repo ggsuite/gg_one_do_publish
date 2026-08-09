@@ -29,6 +29,19 @@ import 'package:gg_one_merge/gg_one_merge.dart';
 
 /// Publishes the current directory.
 ///
+/// The release order is: merge FIRST, upload SECOND. After the version bump
+/// the »doCommit« and »didPublish« states are recorded immediately before
+/// the merge (so the merge carries them into the default branch), the
+/// feature branch is merged into the default branch, and only then is the
+/// package uploaded to its registries — from the feature branch, whose
+/// content the merge made identical to the default branch. A merge that is
+/// refused therefore stops the release while the registries are untouched;
+/// the reverse order left versions on pub.dev/npm that never reached main,
+/// and a registry cannot take an upload back. After the upload the default
+/// branch is checked out to tag the release, then the feature branch is
+/// checked out again and the workspace overrides are restored, so work on
+/// the ticket can simply continue.
+///
 /// All interactive decisions (version increment, merge message, feature
 /// branch deletion) are resolved up front — from explicit parameters,
 /// `--config`, an existing `.gg/gg-publish.json` or an automatic
@@ -499,26 +512,24 @@ class DoPublish extends DirCommand<void> {
     final viaPullRequest =
         resolvedPr && await _pullRequestFlowSupported(directory);
 
-    // A resumed run whose merge already happened may still sit on the
-    // feature branch (gg_multi checks it out again after a failure). Move to
-    // the default branch BEFORE the first push, so no push resurrects the
-    // possibly already-deleted remote feature branch and push/tag target the
-    // release commit.
-    if (resuming && progress.isStepDone('merge') && !viaPullRequest) {
-      await _checkoutDefaultBranch(directory);
-    }
-
-    // Drop the ticket marker (written by `gg do add`) BEFORE version bump and
-    // registry upload — the upload happens before the merge, so the
-    // merge-time removal alone would ship `.gg/ticket.json` to pub.dev/npm
-    // inside the published package. Idempotent, so resumes are safe.
+    // Drop the ticket marker (written by `gg do add`) BEFORE the version
+    // bump: the marker must neither ride into the release commits the merge
+    // puts on the default branch nor ship inside the package the registry
+    // upload publishes from the feature branch afterwards. Idempotent, so
+    // resumes are safe.
     await _mergeFlow.removeTicketJson(
       directory: directory,
       ggLog: ggLog,
       verbose: isVerbose,
     );
 
-    await _doPush.gitPush(directory: directory, force: false);
+    // Push the feature branch — but only while the merge is still open: a
+    // resumed run whose merge already happened has nothing new to offer
+    // here, and the push would resurrect the possibly already-deleted
+    // remote feature branch.
+    if (!progress.isStepDone('merge')) {
+      await _doPush.gitPush(directory: directory, force: false);
+    }
 
     // A merge-only run stops short of every release artifact. Announced once,
     // because a run that ends without a release looks like a failed publish
@@ -544,7 +555,80 @@ class DoPublish extends DirCommand<void> {
       await markStepDone('prepare_version');
     }
 
-    // Step 8: Publish to the registry (pub.dev/npm). The registry lookup is
+    // Step 8: Record the release states and merge into the default branch.
+    // The merge comes FIRST, the registry upload second: a merge that is
+    // refused — a rejected pull request, a protected branch, a conflict —
+    // must stop the release while nothing has reached a registry yet,
+    // because pub.dev and npm cannot take an upload back. A merged but not
+    // yet uploaded state is resumable; an uploaded but not mergeable one
+    // was not.
+    if (!progress.isStepDone('merge')) {
+      // »doCommit« and »didPublish« are written immediately BEFORE the
+      // merge, so the merge itself carries them into the default branch —
+      // in the pull-request flow the provider merges main, and gg cannot
+      // push a fix afterwards. [GgState] hashes the tree and ignores
+      // `.gg/`, and a squash merge keeps the tree, so the hashes recorded
+      // here are exactly the hashes of the default branch after the merge.
+      // »doCommit« makes a later »gg did commit« accept the release commit;
+      // »didPublish« is read back by »gg did publish« and by the multi-repo
+      // flow. The registry upload that still has to happen is guarded by
+      // its own step markers — a run that dies between merge and upload is
+      // resumed with »--continue«, never restarted.
+      //
+      // `ignoreUnstaged` — both states describe the *committed* release
+      // content. [GgState] otherwise hashes untracked files as well, and a
+      // publish runs build, test and packaging scripts: an artifact one of
+      // them leaves behind for a moment would be hashed into the state
+      // without ever being committed, and »gg did commit« / »gg did
+      // publish« would fail the instant it is gone again. Real uncommitted
+      // work still fails those checks, which read the full working tree.
+      //
+      // A merge-only run records no »didPublish« — it releases nothing, so
+      // marking it published would be a lie.
+      await _state.writeSuccess(
+        directory: directory,
+        key: stateKeyDoCommit,
+        ignoreUnstaged: true,
+      );
+      if (!isMergeOnly) {
+        await _state.writeSuccess(
+          directory: directory,
+          key: stateKeyDidPublish,
+          ignoreUnstaged: true,
+        );
+      }
+
+      await _merge(
+        directory: directory,
+        message: resolvedMessage,
+        verbose: isVerbose,
+        viaPullRequest: viaPullRequest,
+        deleteSourceBranch: resolvedDelete,
+      );
+      await markStepDone('merge');
+    }
+
+    // In the pull-request flow the provider already updated main when it
+    // merged the PR. Otherwise the merge exists only locally so far — push
+    // it NOW, before anything reaches a registry, so the release is durable
+    // on the remote first. Through DoPush.get, not raw gitPush: it writes
+    // the »doPush« success state into .gg/gg.json (amended into the release
+    // commit) before pushing, so »gg did push« passes on a fresh CI checkout
+    // of main. The doPush state carried over from the feature branch belongs
+    // to an older hash and would make CI red on every released package.
+    if (!viaPullRequest) {
+      await _checkoutDefaultBranch(directory);
+      await _doPush.get(directory: directory, force: false, ggLog: noLog);
+    }
+
+    // The registry upload and its bookkeeping run on the FEATURE branch: the
+    // lock-file commits the upload leaves behind must never sit on the local
+    // default branch, which gg cannot push in the pull-request flow. The
+    // merge made feature and default branch identical, so the upload
+    // publishes exactly the merged content.
+    await _checkoutFeatureBranch(directory, featureBranch);
+
+    // Step 9: Publish to the registry (pub.dev/npm). The registry lookup is
     // a safety net: a version that is already visible must not be published
     // again on a resumed run whose marker got lost. Packages without a
     // registry target (`publish_to: none`, projects without a manifest)
@@ -626,7 +710,7 @@ class DoPublish extends DirCommand<void> {
       }
     }
 
-    // Step 8b: Registries take a while to make a fresh upload visible. Wait
+    // Step 9b: Registries take a while to make a fresh upload visible. Wait
     // until the version appears on pub.dev/npm — announced with a status
     // url, reporting progress and bounded by a timeout instead of hanging.
     // Idempotent (returns immediately once the version is visible), so it
@@ -637,59 +721,49 @@ class DoPublish extends DirCommand<void> {
       await _waitUntilPublished.get(directory: directory, ggLog: ggLog);
     }
 
-    // Step 9: Merge into the default branch. (When the step is already done
-    // on a resumed run, the default branch was checked out before Step 6.)
-    if (!progress.isStepDone('merge')) {
-      await _merge(
-        directory: directory,
-        message: resolvedMessage,
-        verbose: isVerbose,
-        viaPullRequest: viaPullRequest,
-        deleteSourceBranch: resolvedDelete,
-      );
-      await markStepDone('merge');
-    }
-
-    // The merge/version commits produced a fully-committed, gg-verified HEAD on
-    // the main branch. Record it as »doCommit« too, so a later »gg did commit«
-    // accepts the merge commit instead of rejecting it.
-    //
-    // `ignoreUnstaged` — both states describe the *committed* release content.
-    // [GgState] otherwise hashes untracked files as well, and a publish runs
-    // build, test and packaging scripts: an artifact one of them leaves behind
-    // for a moment would be hashed into the state without ever being
-    // committed, and »gg did commit« / »gg did publish« would fail the instant
-    // it is gone again. Real uncommitted work still fails those checks, which
-    // read the full working tree.
-    await _state.writeSuccess(
-      directory: directory,
-      key: stateKeyDoCommit,
-      ignoreUnstaged: true,
-    );
-
-    // Record the merged state as published, so »gg did publish« answers yes
-    // for exactly this content. A merge-only run records nothing — it
-    // releases nothing, so marking it published would be a lie.
+    // Step 10: Tag the release and push the tags. The tag has to sit on the
+    // release commit of the default branch — the merge step brought local
+    // main up to date, so switch over, tag, push the tags and return to the
+    // feature branch below. A merge-only run marks no release, so it
+    // creates no tag — and has none to push.
     if (!isMergeOnly) {
-      await _state.writeSuccess(
-        directory: directory,
-        key: stateKeyDidPublish,
-        ignoreUnstaged: true,
+      await _checkoutDefaultBranch(directory);
+      if (!progress.isStepDone('tag')) {
+        await _publishGit(directory: directory, ggLog: ggLog);
+        await markStepDone('tag');
+      }
+      await _doPush.gitPush(directory: directory, force: false, pushTags: true);
+    }
+
+    // Step 11: Back to the feature branch — work on the ticket continues
+    // there, not on the default branch the release ended up on.
+    await _checkoutFeatureBranch(directory, featureBranch);
+
+    // Reactivate the overrides the publish had to remove, so the repository
+    // resolves its dependencies against the sibling checkouts of its ticket
+    // workspace again.
+    if (restorePubspecOverrides(directory)) {
+      ggLog(
+        cDetail(
+          'Restored ${NoPubspecOverrides.fileName} from '
+          '$pubspecOverridesBackupPath.',
+        ),
       );
+
+      // The restored overrides are part of the working tree again, so the
+      // »didPublish« hash recorded before the merge no longer matches it.
+      // Re-record the state for the restored workspace, so »gg did publish«
+      // keeps answering yes for exactly the content the user continues
+      // working on. A merge-only run recorded nothing and keeps it that way.
+      if (!isMergeOnly) {
+        await _state.writeSuccess(
+          directory: directory,
+          key: stateKeyDidPublish,
+        );
+      }
     }
 
-    // In the pull-request flow the provider already updated main when it
-    // merged the PR, so skip the direct main push there.
-    if (!viaPullRequest) {
-      // Push through DoPush.get, not raw gitPush: it writes the »doPush«
-      // success state into .gg/gg.json (amended into the release commit)
-      // before pushing, so »gg did push« passes on a fresh CI checkout of
-      // main. The doPush state carried over from the feature branch belongs
-      // to an older hash and would make CI red on every released package.
-      await _doPush.get(directory: directory, force: false, ggLog: noLog);
-    }
-
-    // Step 10: Delete the feature branch. The decision was resolved up
+    // Step 12: Delete the feature branch. The decision was resolved up
     // front (Step 4). Idempotent instead of tracked: a resumed multi-flow
     // run re-pushes the branch before delegating here, so the deletion
     // must re-run — and deleting an already-gone remote ref (e.g. removed
@@ -703,17 +777,7 @@ class DoPublish extends DirCommand<void> {
       );
     }
 
-    // Step 11: Tag the release and push the tags. A merge-only run marks no
-    // release, so it creates no tag — and has none to push.
-    if (!isMergeOnly) {
-      if (!progress.isStepDone('tag')) {
-        await _publishGit(directory: directory, ggLog: ggLog);
-        await markStepDone('tag');
-      }
-      await _doPush.gitPush(directory: directory, force: false, pushTags: true);
-    }
-
-    // Step 12: Fully published — the runtime file has served its purpose.
+    // Step 13: Fully published — the runtime file has served its purpose.
     if (runtimeFile.existsSync()) {
       runtimeFile.deleteSync();
     }
@@ -1003,9 +1067,9 @@ class DoPublish extends DirCommand<void> {
     return true;
   }
 
-  /// Checks out the default branch (`main`/`master`). Used when a resumed run
-  /// skips the already-done merge step: the release commit to push and tag
-  /// lives on the default branch, not on the feature branch HEAD may be on.
+  /// Checks out the default branch (`main`/`master`): the merge commit to
+  /// push and the release commit to tag live there, not on the feature
+  /// branch HEAD may be on.
   Future<void> _checkoutDefaultBranch(Directory directory) async {
     final current = await _localBranch.get(
       directory: directory,
@@ -1031,10 +1095,37 @@ class DoPublish extends DirCommand<void> {
             cError('git checkout $candidate failed: ${checkout.stderr}'),
           );
         }
-        ggLog(cDetail('Checked out $candidate to finish the resumed publish.'));
+        ggLog(cDetail('Checked out $candidate.'));
       }
       return;
     }
+  }
+
+  /// Checks out the feature branch [branchName] again. The merge and the tag
+  /// step leave HEAD on the default branch, but the registry upload and the
+  /// state the user continues working on belong to the feature branch. A
+  /// no-op when HEAD is already there.
+  Future<void> _checkoutFeatureBranch(
+    Directory directory,
+    String branchName,
+  ) async {
+    final current = await _localBranch.get(
+      directory: directory,
+      ggLog: <String>[].add,
+    );
+    if (current == branchName) {
+      return;
+    }
+    final checkout = await _processWrapper.run('git', [
+      'checkout',
+      branchName,
+    ], workingDirectory: directory.path);
+    if (checkout.exitCode != 0) {
+      throw Exception(
+        cError('git checkout $branchName failed: ${checkout.stderr}'),
+      );
+    }
+    ggLog(cDetail('Checked out $branchName.'));
   }
 
   /// Adds the version tag for [directory] so `do_push --tags` carries it.
@@ -1486,10 +1577,10 @@ class DoPublish extends DirCommand<void> {
   /// the package is published against the versions on pub.dev instead of the
   /// developer's working copies. Does nothing when there is none.
   ///
-  /// The file is saved to [pubspecOverridesBackupPath] first: the multi-repo
-  /// flow restores it once the merge into the main branch is through, so the
-  /// repository keeps resolving against its sibling checkouts after the
-  /// publish.
+  /// The file is saved to [pubspecOverridesBackupPath] first: the end of the
+  /// publish restores it once the release is through and the feature branch
+  /// is checked out again, so the repository keeps resolving against its
+  /// sibling checkouts after the publish.
   void _deletePubspecOverrides({
     required Directory directory,
     required GgLog ggLog,

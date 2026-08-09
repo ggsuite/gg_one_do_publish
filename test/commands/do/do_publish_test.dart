@@ -70,18 +70,24 @@ void main() {
     return false;
   }
 
-  // After a publish the head commit is gg's own »#gg: …« state bookkeeping
-  // (user commits are never amended) — the merge message sits directly
-  // beneath it. Asserts the bookkeeping commit and returns that message.
+  // Returns the merge message of the default branch. The »doCommit« and
+  // »didPublish« states are recorded before the merge and ride into main
+  // inside the squash commit, so main usually ends exactly on the merge
+  // message — but the main push may still add gg's own »#gg: …« state
+  // bookkeeping on top when a hash was not aligned yet. HEAD itself ends up
+  // back on the feature branch, so the history is read from `main`
+  // explicitly.
   Future<String> mergeMessageBelowStateCommit(Directory dir) async {
     final result = await Process.run('git', [
       'log',
       '-2',
       '--format=%s',
+      'main',
     ], workingDirectory: dir.path);
     final lines = (result.stdout as String).trim().split('\n');
-    expect(lines.first, '#gg: Add .gg/gg.json check results');
-    return lines.last;
+    return lines.first == '#gg: Add .gg/gg.json check results'
+        ? lines.last
+        : lines.first;
   }
 
   // Builds the DoConfigurePublish that »do publish« runs when it is started
@@ -343,12 +349,55 @@ void main() {
     processWrapper = MockGgProcessWrapper();
     localBranch = MockLocalBranch();
 
+    // The publish switches between the feature and the default branch, and
+    // the checkout helpers consult LocalBranch for where HEAD currently is —
+    // a fixed answer would make them skip or repeat checkouts. The mock
+    // therefore reports the real repository; tests that need a fixed branch
+    // override it.
     when(
       () => localBranch.get(
         directory: any(named: 'directory'),
         ggLog: any(named: 'ggLog'),
       ),
-    ).thenAnswer((_) async => 'feat_abc');
+    ).thenAnswer((_) async {
+      final result = await Process.run('git', [
+        'rev-parse',
+        '--abbrev-ref',
+        'HEAD',
+      ], workingDirectory: d.path);
+      return (result.stdout as String).trim();
+    });
+
+    // The branch switches of the flow run through the injectable process
+    // wrapper. Delegate them to the real repository by default, so the
+    // integration tests actually change branches; tests that assert the
+    // checkout behavior itself override these stubs with fakes.
+    for (final branch in ['main', 'master', 'feat_abc', 'feat_other']) {
+      when(
+        () => processWrapper.run('git', [
+          'rev-parse',
+          '--verify',
+          '--quiet',
+          'refs/heads/$branch',
+        ], workingDirectory: d.path),
+      ).thenAnswer(
+        (_) => Process.run('git', [
+          'rev-parse',
+          '--verify',
+          '--quiet',
+          'refs/heads/$branch',
+        ], workingDirectory: d.path),
+      );
+      when(
+        () => processWrapper.run('git', [
+          'checkout',
+          branch,
+        ], workingDirectory: d.path),
+      ).thenAnswer(
+        (_) =>
+            Process.run('git', ['checkout', branch], workingDirectory: d.path),
+      );
+    }
 
     // The delete step looks the remote ref up first. By default both branches
     // used in the tests still exist on the remote.
@@ -640,6 +689,14 @@ void main() {
               deleteFeatureBranch: false,
             );
 
+            // The fresh doPush state matters for the release commit on the
+            // default branch — a CI checkout of the released package reads
+            // it there. HEAD ends up back on the feature branch, so switch
+            // over to assert it.
+            await Process.run('git', [
+              'checkout',
+              'main',
+            ], workingDirectory: d.path);
             expect(
               await DidPush(ggLog: ggLog).get(directory: d, ggLog: ggLog),
               isTrue,
@@ -1193,50 +1250,67 @@ void main() {
                 ], workingDirectory: d.path),
               ).called(1);
               expect(
-                messages[messages.length - 2],
+                messages.last,
                 contains('Deleted remote feature branch feat_abc.'),
               );
             },
           );
 
-          test(
-            'backs up and deletes a leftover pubspec_overrides.yaml',
-            () async {
-              mockPublishIsSuccessful(
-                success: true,
-                askBeforePublishing: false,
-              );
+          test('backs up a leftover pubspec_overrides.yaml for the release '
+              'and restores it at the end', () async {
+            mockPublishIsSuccessful(success: true, askBeforePublishing: false);
 
-              final overrides = File(join(d.path, 'pubspec_overrides.yaml'))
-                ..writeAsStringSync(
-                  'dependency_overrides:\n  gg_log:\n    path: ../gg_log',
-                );
-
-              await doPublish.exec(
-                directory: d,
-                ggLog: ggLog,
-                askBeforePublishing: false,
-                deleteFeatureBranch: false,
-              );
-
-              expect(overrides.existsSync(), isFalse);
-              // The multi-repo flow restores the file from the backup after
-              // the merge, so the repo stays wired to its sibling checkouts.
-              expect(
-                File(
-                  join(d.path, pubspecOverridesBackupPath),
-                ).readAsStringSync(),
+            final overrides = File(join(d.path, 'pubspec_overrides.yaml'))
+              ..writeAsStringSync(
                 'dependency_overrides:\n  gg_log:\n    path: ../gg_log',
               );
-              expect(
-                messages.join('\n'),
-                contains(
-                  'Saved pubspec_overrides.yaml to '
-                  '$pubspecOverridesBackupPath and deleted it.',
-                ),
-              );
-            },
-          );
+
+            await doPublish.exec(
+              directory: d,
+              ggLog: ggLog,
+              askBeforePublishing: false,
+              deleteFeatureBranch: false,
+            );
+
+            // The publish removed the file up front, so the release
+            // resolved against the registry instead of the developer's
+            // working copies ...
+            expect(
+              messages.join('\n'),
+              contains(
+                'Saved pubspec_overrides.yaml to '
+                '$pubspecOverridesBackupPath and deleted it.',
+              ),
+            );
+
+            // ... and restored it once the feature branch was checked out
+            // again, so the repository keeps resolving against the
+            // sibling checkouts of its ticket workspace. The restore
+            // consumes the backup.
+            expect(
+              overrides.readAsStringSync(),
+              'dependency_overrides:\n  gg_log:\n    path: ../gg_log',
+            );
+            expect(
+              File(join(d.path, pubspecOverridesBackupPath)).existsSync(),
+              isFalse,
+            );
+            expect(
+              messages.join('\n'),
+              contains(
+                'Restored pubspec_overrides.yaml from '
+                '$pubspecOverridesBackupPath.',
+              ),
+            );
+
+            // The restored overrides are part of the working tree again —
+            // the didPublish state was re-recorded for exactly this
+            // content, so »gg did publish« keeps answering yes.
+            expect(
+              await DidPublish(ggLog: ggLog).get(directory: d, ggLog: ggLog),
+              isTrue,
+            );
+          });
 
           test(
             'skips the delete when the remote branch is already gone',
@@ -2413,7 +2487,25 @@ void main() {
             viaPullRequest: any(named: 'viaPullRequest'),
             deleteSourceBranch: any(named: 'deleteSourceBranch'),
           ),
-        ).thenAnswer((_) async {});
+        ).thenAnswer((_) async {
+          // The real pull-request flow ends with local main checked out at
+          // the merged state — the tag step that follows the upload relies
+          // on that. Emulate it with a local squash merge.
+          await Process.run('git', [
+            'checkout',
+            'main',
+          ], workingDirectory: d.path);
+          await Process.run('git', [
+            'merge',
+            '--squash',
+            'feat_abc',
+          ], workingDirectory: d.path);
+          await Process.run('git', [
+            'commit',
+            '-m',
+            'PR squash commit',
+          ], workingDirectory: d.path);
+        });
         when(
           () => mockMergeFlow.removeTicketJson(
             directory: any(named: 'directory'),
@@ -2497,6 +2589,211 @@ void main() {
             'feat_abc',
           ], workingDirectory: d.path),
         ).called(1);
+      });
+    });
+
+    group('merge before publish (the release order)', () {
+      test('merges into main BEFORE the registry upload — and uploads '
+          'from the feature branch', () async {
+        String? branchAtUpload;
+        bool? mergedAtUpload;
+        when(
+          () => publish.exec(
+            directory: dMock(),
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            targets: any(named: 'targets'),
+            onPublished: any(named: 'onPublished'),
+          ),
+        ).thenAnswer((_) async {
+          final branch = await Process.run('git', [
+            'rev-parse',
+            '--abbrev-ref',
+            'HEAD',
+          ], workingDirectory: d.path);
+          branchAtUpload = (branch.stdout as String).trim();
+
+          // Does main already carry the release content when the upload
+          // starts? The bumped pubspec.yaml is the release marker.
+          final diff = await Process.run('git', [
+            'diff',
+            '--quiet',
+            'main',
+            'HEAD',
+            '--',
+            'pubspec.yaml',
+          ], workingDirectory: d.path);
+          mergedAtUpload = diff.exitCode == 0;
+
+          publishedVersionValue = Version.parse('1.2.4');
+          ggLog('Publishing was successful.');
+        });
+        publishedVersionValue = Version(1, 2, 3);
+        mockPublishedVersion();
+
+        await doPublish.exec(
+          directory: d,
+          ggLog: ggLog,
+          askBeforePublishing: false,
+          deleteFeatureBranch: false,
+        );
+
+        // The upload ran on the feature branch, whose content the merge
+        // had already brought onto the default branch.
+        expect(branchAtUpload, 'feat_abc');
+        expect(mergedAtUpload, isTrue);
+      });
+
+      test('records didPublish and doCommit before the merge, so the '
+          'merge itself carries them into main', () async {
+        mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+
+        await doPublish.exec(
+          directory: d,
+          ggLog: ggLog,
+          askBeforePublishing: false,
+          deleteFeatureBranch: false,
+        );
+
+        // The COMMITTED .gg/gg.json of the default branch carries both
+        // states — in the pull-request flow no push to main could have
+        // added them afterwards.
+        final committed = await Process.run('git', [
+          'show',
+          'main:.gg/gg.json',
+        ], workingDirectory: d.path);
+        final json =
+            jsonDecode(committed.stdout as String) as Map<String, dynamic>;
+        expect(json.containsKey('didPublish'), isTrue);
+        expect(json.containsKey('doCommit'), isTrue);
+
+        // And »gg did publish« answers yes on the default branch.
+        await Process.run('git', [
+          'checkout',
+          'main',
+        ], workingDirectory: d.path);
+        expect(
+          await DidPublish(ggLog: ggLog).get(directory: d, ggLog: ggLog),
+          isTrue,
+        );
+      });
+
+      test('a refused merge stops the release before anything reaches '
+          'a registry', () async {
+        mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+        final failingMergeFlow = MockMergeFlow();
+        when(
+          () => failingMergeFlow.removeTicketJson(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+            verbose: any(named: 'verbose'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => failingMergeFlow.get(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+            automerge: any(named: 'automerge'),
+            local: any(named: 'local'),
+            message: any(named: 'message'),
+            verbose: any(named: 'verbose'),
+            viaPullRequest: any(named: 'viaPullRequest'),
+            deleteSourceBranch: any(named: 'deleteSourceBranch'),
+          ),
+        ).thenThrow(Exception('Merge was rejected'));
+
+        final mergeFirstPublish = DoPublish(
+          waitUntilPublished: waitUntilPublished,
+          ggLog: ggLog,
+          publish: publish,
+          prepareNextVersion: PrepareNextVersion(
+            ggLog: ggLog,
+            publishedVersion: publishedVersion,
+          ),
+          canPublish: canPublish,
+          isPublished: IsPublished(
+            ggLog: ggLog,
+            publishedVersion: publishedVersion,
+          ),
+          configurePublish: makeConfigurePublish(),
+          publishedVersion: publishedVersion,
+          processWrapper: processWrapper,
+          localBranch: localBranch,
+          confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+          mergeFlow: failingMergeFlow,
+        );
+
+        await expectLater(
+          () => mergeFirstPublish.exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+          ),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'message',
+              contains('Merge was rejected'),
+            ),
+          ),
+        );
+
+        // Nothing was uploaded — a registry cannot take a version back,
+        // while the merged-but-not-uploaded state is simply resumable.
+        verifyNever(
+          () => publish.exec(
+            directory: any<Directory>(named: 'directory'),
+            ggLog: any<GgLog>(named: 'ggLog'),
+            askBeforePublishing: any<bool>(named: 'askBeforePublishing'),
+            targets: any(named: 'targets'),
+            onPublished: any(named: 'onPublished'),
+          ),
+        );
+      });
+
+      test('ends back on the feature branch', () async {
+        mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+
+        await doPublish.exec(
+          directory: d,
+          ggLog: ggLog,
+          askBeforePublishing: false,
+          deleteFeatureBranch: false,
+        );
+
+        final branch = await Process.run('git', [
+          'rev-parse',
+          '--abbrev-ref',
+          'HEAD',
+        ], workingDirectory: d.path);
+        expect((branch.stdout as String).trim(), 'feat_abc');
+      });
+
+      test('throws when the switch back to the feature branch fails', () async {
+        mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+        when(
+          () => processWrapper.run('git', [
+            'checkout',
+            'feat_abc',
+          ], workingDirectory: d.path),
+        ).thenAnswer((_) async => ProcessResult(0, 1, '', 'boom'));
+
+        await expectLater(
+          () => doPublish.exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+          ),
+          throwsA(
+            isA<Exception>().having(
+              (e) => rmControls(e.toString()),
+              'message',
+              contains('git checkout feat_abc failed'),
+            ),
+          ),
+        );
       });
     });
 
@@ -2799,10 +3096,7 @@ void main() {
 
         final allMessages = messages.join('\n');
         expect(allMessages, contains('Resuming the unfinished publish'));
-        expect(
-          allMessages,
-          contains('Checked out main to finish the resumed publish.'),
-        );
+        expect(allMessages, contains('Checked out main.'));
         // The registry publish was skipped — the step was already done.
         verifyNever(
           () => publish.exec(
@@ -2813,13 +3107,15 @@ void main() {
             onPublished: any(named: 'onPublished'),
           ),
         );
-        // The default branch was checked out and the tag added there.
+        // The default branch was checked out twice — once to re-push the
+        // merged default branch, once for the tag step — and the tag was
+        // added there.
         verify(
           () => processWrapper.run('git', [
             'checkout',
             'main',
           ], workingDirectory: d.path),
-        ).called(1);
+        ).called(2);
         verify(
           () => tag.exec(
             directory: any<Directory>(named: 'directory'),
@@ -2885,6 +3181,18 @@ void main() {
       test('the persisted branch wins over HEAD for the delete step', () async {
         // After its merge the resumed run sits on the default branch — the
         // branch to delete must come from the runtime file, not from HEAD.
+        // The interrupted publish ran on a real feat_other branch, which
+        // still exists locally when the resume switches back to it.
+        await Process.run('git', [
+          'branch',
+          'feat_other',
+        ], workingDirectory: d.path);
+        await Process.run('git', [
+          'push',
+          '-u',
+          'origin',
+          'feat_other',
+        ], workingDirectory: d.path);
         when(
           () => localBranch.get(
             directory: any(named: 'directory'),
@@ -2934,7 +3242,19 @@ void main() {
       test(
         'a resume reuses the stored delete decision without a prompt',
         () async {
-          // After its merge the resumed run sits on the default branch.
+          // After its merge the resumed run sits on the default branch. The
+          // interrupted publish ran on a real feat_other branch, which
+          // still exists locally when the resume switches back to it.
+          await Process.run('git', [
+            'branch',
+            'feat_other',
+          ], workingDirectory: d.path);
+          await Process.run('git', [
+            'push',
+            '-u',
+            'origin',
+            'feat_other',
+          ], workingDirectory: d.path);
           when(
             () => localBranch.get(
               directory: any(named: 'directory'),
@@ -2980,7 +3300,18 @@ void main() {
           // The delete re-runs on resume (a multi-flow resume may have
           // re-pushed the branch); a remote ref that is already gone must
           // not fail the run. After its merge the run sits on the default
-          // branch.
+          // branch; the local feat_other branch of the interrupted publish
+          // still exists.
+          await Process.run('git', [
+            'branch',
+            'feat_other',
+          ], workingDirectory: d.path);
+          await Process.run('git', [
+            'push',
+            '-u',
+            'origin',
+            'feat_other',
+          ], workingDirectory: d.path);
           when(
             () => localBranch.get(
               directory: any(named: 'directory'),
@@ -3142,12 +3473,13 @@ void main() {
             deleteFeatureBranch: false,
           );
 
+          // Once to push the merged default branch, once for the tag step.
           verify(
             () => processWrapper.run('git', [
               'checkout',
               'master',
             ], workingDirectory: d.path),
-          ).called(1);
+          ).called(2);
         });
 
         test('does not check out when already on the default branch', () async {
@@ -3285,13 +3617,14 @@ void main() {
         expect(allMessages, contains('✓ Removed the remote tag 1.2.4.'));
         expect(allMessages, contains('✓ Tag 1.2.4 added.'));
 
-        // The tag was recreated on the release commit, not on the
-        // abandoned one - locally as well as on the remote.
-        final head = await Process.run('git', [
+        // The tag was recreated on the release commit of the default
+        // branch, not on the abandoned one - locally as well as on the
+        // remote.
+        final releaseCommit = await Process.run('git', [
           'rev-parse',
-          'HEAD',
+          'main',
         ], workingDirectory: d.path);
-        expect(head.stdout, isNot(abandoned.stdout));
+        expect(releaseCommit.stdout, isNot(abandoned.stdout));
 
         final tagged = await Process.run('git', [
           'rev-list',
@@ -3299,7 +3632,7 @@ void main() {
           '1',
           '1.2.4',
         ], workingDirectory: d.path);
-        expect(tagged.stdout, head.stdout);
+        expect(tagged.stdout, releaseCommit.stdout);
 
         // The remote now carries the recreated (annotated) tag object, and no
         // longer the lightweight tag of the abandoned commit.
@@ -3513,7 +3846,21 @@ void main() {
           force: true,
         );
 
-        expect(overrides.existsSync(), isFalse);
+        // The overrides were removed for the merge itself — the main branch
+        // must not carry them — and restored once the feature branch was
+        // checked out again, so the ticket workspace keeps its wiring.
+        expect(
+          messages.join('\n'),
+          contains(
+            'Saved pubspec_overrides.yaml to '
+            '$pubspecOverridesBackupPath and deleted it.',
+          ),
+        );
+        expect(overrides.existsSync(), isTrue);
+        expect(
+          File(join(d.path, pubspecOverridesBackupPath)).existsSync(),
+          isFalse,
+        );
         expect(await tagsOf(d), isEmpty);
       });
 
