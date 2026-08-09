@@ -653,13 +653,29 @@ class DoPublish extends DirCommand<void> {
     // The merge/version commits produced a fully-committed, gg-verified HEAD on
     // the main branch. Record it as »doCommit« too, so a later »gg did commit«
     // accepts the merge commit instead of rejecting it.
-    await _state.writeSuccess(directory: directory, key: stateKeyDoCommit);
+    //
+    // `ignoreUnstaged` — both states describe the *committed* release content.
+    // [GgState] otherwise hashes untracked files as well, and a publish runs
+    // build, test and packaging scripts: an artifact one of them leaves behind
+    // for a moment would be hashed into the state without ever being
+    // committed, and »gg did commit« / »gg did publish« would fail the instant
+    // it is gone again. Real uncommitted work still fails those checks, which
+    // read the full working tree.
+    await _state.writeSuccess(
+      directory: directory,
+      key: stateKeyDoCommit,
+      ignoreUnstaged: true,
+    );
 
     // Record the merged state as published, so »gg did publish« answers yes
     // for exactly this content. A merge-only run records nothing — it
     // releases nothing, so marking it published would be a lie.
     if (!isMergeOnly) {
-      await _state.writeSuccess(directory: directory, key: stateKeyDidPublish);
+      await _state.writeSuccess(
+        directory: directory,
+        key: stateKeyDidPublish,
+        ignoreUnstaged: true,
+      );
     }
 
     // In the pull-request flow the provider already updated main when it
