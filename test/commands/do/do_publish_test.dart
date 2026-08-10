@@ -259,7 +259,7 @@ void main() {
 
   // ...........................................................................
   Future<void> resetTicketFile() async {
-    await File(join(d.path, '.ticket')).writeAsString(
+    await File(join(d.path, 'ticket.json')).writeAsString(
       jsonEncode(<String, String>{
         'issue_id': 'feat_abc',
         'description': 'Ticket merge message',
@@ -1094,11 +1094,11 @@ void main() {
             expect(headMessage, customMessage);
           });
 
-          test('loads merge message from .ticket '
+          test('loads merge message from ticket.json '
               'and allows editing when not provided', () async {
             mockPublishIsSuccessful(success: true, askBeforePublishing: false);
 
-            await File(join(d.path, '.ticket')).writeAsString(
+            await File(join(d.path, 'ticket.json')).writeAsString(
               jsonEncode(<String, String>{
                 'issue_id': 'feat_abc',
                 'description': 'Ticket merge message',
@@ -1146,15 +1146,15 @@ void main() {
           });
 
           test('uses empty initial merge message when '
-              '.ticket is missing and message is not provided', () async {
+              'ticket.json is missing and message is not provided', () async {
             mockPublishIsSuccessful(success: true, askBeforePublishing: false);
-            final ticketFile = File(join(d.path, '.ticket'));
+            final ticketFile = File(join(d.path, 'ticket.json'));
             if (await ticketFile.exists()) {
               await ticketFile.delete();
             }
 
             // commit deletion and refresh state hashes
-            await commitFile(d, '.ticket');
+            await commitFile(d, 'ticket.json');
             await makeLastStateSuccessful();
 
             var initialMessage = 'not set';
@@ -1201,7 +1201,7 @@ void main() {
               'message is provided programmatically', () async {
             mockPublishIsSuccessful(success: true, askBeforePublishing: false);
 
-            await File(join(d.path, '.ticket')).writeAsString(
+            await File(join(d.path, 'ticket.json')).writeAsString(
               jsonEncode(<String, String>{
                 'issue_id': 'feat_abc',
                 'description': 'Ticket merge message',
