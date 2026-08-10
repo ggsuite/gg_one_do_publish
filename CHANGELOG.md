@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.0 - 2026-08-10
+
+### Changed
+
+- The publish runtime file is split: `.gg/publish_config.json` (answers) and `.gg/publish_state.json` (run state). `--restart` discards only the state
+- `publish_config.json` is removed right before the merge, `publish_state.json` on full success
+- Refactor commit messages, version increment
+
 ## 2.4.3 - 2026-08-10
 
 ### Added
