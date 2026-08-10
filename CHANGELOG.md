@@ -6,6 +6,19 @@
 
 - The publish runtime file is split: `.gg/publish_config.json` (answers) and `.gg/publish_state.json` (run state). `--restart` discards only the state
 - `publish_config.json` is removed right before the merge, `publish_state.json` on full success
+- Refactor commit messages, version increment
+
+## 2.4.3 - 2026-08-10
+
+### Added
+
+- `do publish` upgrades and tightens the dependencies (»dart pub upgrade
+--major-versions --tighten«) before validating and releasing — `--no-upgrade`
+(or `upgrade: false`) turns it off for callers that upgrade themselves
+
+### Changed
+
+- Make sure »dart pub upgrade --tighten --major-versions« is called before publishing
 
 ## 2.4.2 - 2026-08-10
 

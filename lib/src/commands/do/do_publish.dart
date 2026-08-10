@@ -71,6 +71,9 @@ import 'package:gg_one_merge/gg_one_merge.dart';
 ///   version instead of the stable release.
 /// - `--continue` reuses `.gg/gg-publish.json` and skips the steps that are
 ///   already done; `--restart` discards config *and* progress.
+/// - `--no-upgrade` skips the »dart pub upgrade --major-versions --tighten«
+///   that otherwise runs right before `can publish` — for callers like
+///   gg_multi that upgrade the whole ticket themselves.
 class DoPublish extends DirCommand<void> {
   /// Constructor
   DoPublish({
@@ -102,6 +105,7 @@ class DoPublish extends DirCommand<void> {
     EnsurePublishConfigIgnored? ensureIgnored,
     WaitUntilPublished? waitUntilPublished,
     SyncHybridVersions? syncHybridVersions,
+    DoUpgradeDeps? upgradeDeps,
     // coverage:ignore-start
   }) : _canPublish = canPublish ?? CanPublish(ggLog: ggLog),
        _publishToPubDev = publish ?? Publish(ggLog: ggLog),
@@ -145,7 +149,8 @@ class DoPublish extends DirCommand<void> {
        _waitUntilPublished =
            waitUntilPublished ?? WaitUntilPublished(ggLog: ggLog),
        _syncHybridVersions =
-           syncHybridVersions ?? SyncHybridVersions(ggLog: ggLog) {
+           syncHybridVersions ?? SyncHybridVersions(ggLog: ggLog),
+       _upgradeDeps = upgradeDeps ?? DoUpgradeDeps(ggLog: ggLog) {
     // coverage:ignore-end
     _addArgs();
   }
@@ -172,6 +177,7 @@ class DoPublish extends DirCommand<void> {
     bool? pr,
     bool? mergeOnly,
     bool? force,
+    bool? upgrade,
     Map<String, dynamic> options = const {},
   }) => get(
     directory: directory,
@@ -186,6 +192,7 @@ class DoPublish extends DirCommand<void> {
     pr: pr,
     mergeOnly: mergeOnly,
     force: force,
+    upgrade: upgrade,
     pana: options[panaOption] as bool?,
   );
 
@@ -203,10 +210,12 @@ class DoPublish extends DirCommand<void> {
     bool? pr,
     bool? mergeOnly,
     bool? force,
+    bool? upgrade,
     bool? pana,
   }) async {
     final isVerbose = verbose ?? _verboseFromArgs;
     var usePana = pana ?? _panaFromArgs;
+    final useUpgrade = upgrade ?? _upgradeFromArgs;
     final isMergeOnly = mergeOnly ?? _mergeOnlyFromArgs;
     final isForce = force ?? _forceFromArgs;
     _publishedVersion ??= PublishedVersion(ggLog: ggLog);
@@ -494,6 +503,56 @@ class DoPublish extends DirCommand<void> {
             ),
           );
         }
+      }
+    }
+
+    // Step 5c: Upgrade and tighten the dependencies — »dart pub upgrade
+    // --major-versions --tighten«. A release must ship the constraints that
+    // were actually resolved and tested: without this step pana rejects the
+    // upload for outdated dependencies, and the published manifest allows
+    // versions nobody ever built against. It runs AFTER the
+    // pubspec_overrides.yaml deletion of Step 0b, so it resolves against the
+    // registry and not against the local working copies of a ticket
+    // workspace, and BEFORE `can publish`, whose pana sees the result.
+    //
+    // A resumed run skips it for the same reason it skips `can publish`: its
+    // version is bumped and possibly uploaded already, and re-resolving would
+    // rewrite a mid-publish state. gg_multi's `do publish` upgrades every
+    // ticket repo itself, in dependency order, and turns this off with
+    // »upgrade: false« instead of resolving each repo twice.
+    if (!resuming && useUpgrade) {
+      // The hash covers the content of the working tree, so it answers
+      // whether the upgrade changed anything — and it answers it about the
+      // upgrade alone, not about dirt the tree already carried. An upgrade
+      // that found everything up to date must write no commit and no state:
+      // that would invalidate the recorded check results of a repository
+      // nobody touched.
+      final hashBefore = await _state.currentHash(
+        directory: directory,
+        ggLog: <String>[].add,
+      );
+
+      await _upgradeDeps.exec(directory: directory, ggLog: ggLog);
+
+      final hashAfter = await _state.currentHash(
+        directory: directory,
+        ggLog: <String>[].add,
+      );
+
+      if (hashAfter != hashBefore) {
+        // The upgrade rewrote pubspec.yaml and pubspec.lock — `can publish`
+        // contains `did commit` and would refuse over the dirty tree. The
+        // recorded hash covers exactly this content, so it is written anew.
+        // Anything else the tree carries is the user's and gets its own,
+        // prefix-less commit first.
+        await _systemCommit.commit(
+          directory: directory,
+          ggLog: ggLog,
+          message:
+              '${ggCommitPrefix}dart pub upgrade --major-versions --tighten',
+          userCommitMessage: readTicketDescriptionForRepo,
+          stateKey: GgState.doCommitKey,
+        );
       }
     }
 
@@ -808,6 +867,7 @@ class DoPublish extends DirCommand<void> {
 
   final Publish _publishToPubDev;
   final SyncHybridVersions _syncHybridVersions;
+  final DoUpgradeDeps _upgradeDeps;
   final CanPublish _canPublish;
   final GgState _state;
   final AddVersionTag _addVersionTag;
@@ -1704,6 +1764,8 @@ class DoPublish extends DirCommand<void> {
 
   bool get _panaFromArgs => argResults?[panaOption] as bool? ?? true;
 
+  bool get _upgradeFromArgs => argResults?['upgrade'] as bool? ?? true;
+
   bool get _prWasProvided => argResults?.wasParsed('pr') ?? false;
 
   String? get _messageFromArgs => argResults?['message'] as String?;
@@ -1737,6 +1799,13 @@ class DoPublish extends DirCommand<void> {
     argParser.addFlag(
       panaOption,
       help: 'Run »dart run pana« as part of »can publish«.',
+      defaultsTo: true,
+      negatable: true,
+    );
+
+    argParser.addFlag(
+      'upgrade',
+      help: 'Upgrade and tighten the dependencies before publishing.',
       defaultsTo: true,
       negatable: true,
     );
