@@ -252,34 +252,30 @@ packages:
   gg_merge:
     dependency: "direct main"
     description:
-      name: gg_merge
-      sha256: f2c279803a96f002f0c3901a2ec069c9546926b6bc844766b73fce58ce1301a0
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_merge"
+      relative: true
+    source: path
     version: "3.2.1"
   gg_one_commit:
     dependency: "direct main"
     description:
-      name: gg_one_commit
-      sha256: "19ec3053857d7195ef85a596d5a397e3668181da59693ec7812a48d3a1b7a598"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_one_commit"
+      relative: true
+    source: path
     version: "2.2.2"
   gg_one_core:
     dependency: "direct main"
     description:
-      name: gg_one_core
-      sha256: "78fbacd295eeb8b3788e7e131279459917bacd32d66ed160bb76b0ea5f965d0f"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_one_core"
+      relative: true
+    source: path
     version: "2.3.2"
   gg_one_merge:
     dependency: "direct main"
     description:
-      name: gg_one_merge
-      sha256: "5c61829af0f2c4ed168215a9687cafe2bd82c250d9177aa3e30e86d8ecb38b26"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_one_merge"
+      relative: true
+    source: path
     version: "2.3.2"
   gg_process:
     dependency: "direct main"
