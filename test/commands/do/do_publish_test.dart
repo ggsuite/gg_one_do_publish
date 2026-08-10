@@ -61,6 +61,9 @@ void main() {
   // Mocks
   late Publish publish;
   late MockWaitUntilPublished waitUntilPublished;
+  // The dependency upgrade shells out to »dart pub upgrade« — mocked away
+  // everywhere, its own behavior is covered in gg_one_commit.
+  late MockDoUpgradeDeps upgradeDeps;
 
   Future<String?> defaultEditMessage(String initialMessage) async {
     return initialMessage;
@@ -187,6 +190,7 @@ void main() {
     );
 
     final cliDoPublish = DoPublish(
+      upgradeDeps: upgradeDeps,
       waitUntilPublished: waitUntilPublished,
       ggLog: ggLog,
       publish: publish,
@@ -340,6 +344,8 @@ void main() {
     registerFallbackValue(PublishTarget.pubDev);
     publish = MockPublish();
     waitUntilPublished = MockWaitUntilPublished();
+    upgradeDeps = MockDoUpgradeDeps();
+    upgradeDeps.mockExec(result: null);
     when(
       () => waitUntilPublished.get(
         directory: any(named: 'directory'),
@@ -478,6 +484,7 @@ void main() {
 
     // Instantiate with mocks
     doPublish = DoPublish(
+      upgradeDeps: upgradeDeps,
       waitUntilPublished: waitUntilPublished,
       ggLog: ggLog,
       publish: publish,
@@ -731,6 +738,7 @@ void main() {
           group('not to pub.dev', () {
             test('when »publish_to: none« in pubspec.yaml', () async {
               doPublish = DoPublish(
+                upgradeDeps: upgradeDeps,
                 waitUntilPublished: waitUntilPublished,
                 ggLog: ggLog,
                 publish: publish,
@@ -1107,6 +1115,7 @@ void main() {
 
             var initialMessage = '';
             final doPublishWithEditor = DoPublish(
+              upgradeDeps: upgradeDeps,
               waitUntilPublished: waitUntilPublished,
               ggLog: ggLog,
               publish: publish,
@@ -1159,6 +1168,7 @@ void main() {
 
             var initialMessage = 'not set';
             final doPublishWithEditor = DoPublish(
+              upgradeDeps: upgradeDeps,
               waitUntilPublished: waitUntilPublished,
               ggLog: ggLog,
               publish: publish,
@@ -1209,6 +1219,7 @@ void main() {
             );
 
             final doPublishWithEditor = DoPublish(
+              upgradeDeps: upgradeDeps,
               waitUntilPublished: waitUntilPublished,
               ggLog: ggLog,
               publish: publish,
@@ -1441,6 +1452,7 @@ void main() {
 
             var promptBranchName = '';
             final doPublishWithPrompt = DoPublish(
+              upgradeDeps: upgradeDeps,
               waitUntilPublished: waitUntilPublished,
               ggLog: ggLog,
               publish: publish,
@@ -1500,6 +1512,7 @@ void main() {
 
               var promptBranchName = '';
               final doPublishWithPrompt = DoPublish(
+                upgradeDeps: upgradeDeps,
                 waitUntilPublished: waitUntilPublished,
                 ggLog: ggLog,
                 publish: publish,
@@ -1552,6 +1565,7 @@ void main() {
             );
 
             final headlessPublish = DoPublish(
+              upgradeDeps: upgradeDeps,
               waitUntilPublished: waitUntilPublished,
               ggLog: ggLog,
               publish: publish,
@@ -1596,6 +1610,7 @@ void main() {
             mockPublishIsSuccessful(success: true, askBeforePublishing: false);
 
             final cliDoPublish = DoPublish(
+              upgradeDeps: upgradeDeps,
               waitUntilPublished: waitUntilPublished,
               ggLog: ggLog,
               publish: publish,
@@ -1657,6 +1672,7 @@ void main() {
 
             // Editor must stay shut when --config supplies both fields.
             final cliDoPublish = DoPublish(
+              upgradeDeps: upgradeDeps,
               waitUntilPublished: waitUntilPublished,
               ggLog: ggLog,
               publish: publish,
@@ -1716,6 +1732,7 @@ void main() {
             mockPublishIsSuccessful(success: true, askBeforePublishing: false);
 
             final cliDoPublish = DoPublish(
+              upgradeDeps: upgradeDeps,
               waitUntilPublished: waitUntilPublished,
               ggLog: ggLog,
               publish: publish,
@@ -1763,6 +1780,7 @@ void main() {
               );
 
               final cliDoPublish = DoPublish(
+                upgradeDeps: upgradeDeps,
                 waitUntilPublished: waitUntilPublished,
                 ggLog: ggLog,
                 publish: publish,
@@ -1818,6 +1836,7 @@ void main() {
               await resetTicketFile();
 
               final cliDoPublish = DoPublish(
+                upgradeDeps: upgradeDeps,
                 waitUntilPublished: waitUntilPublished,
                 ggLog: ggLog,
                 publish: publish,
@@ -2047,6 +2066,7 @@ void main() {
           ).thenAnswer((_) async => ggLog('Tag 0.0.1 added.'));
 
           final localDoPublish = DoPublish(
+            upgradeDeps: upgradeDeps,
             ggLog: ggLog,
             publish: publish,
             prepareNextVersion: PrepareNextVersion(
@@ -2124,6 +2144,7 @@ void main() {
         mockPublishedVersion();
 
         return DoPublish(
+          upgradeDeps: upgradeDeps,
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
           publish: publish,
@@ -2237,6 +2258,7 @@ void main() {
         mockPublishedVersion();
 
         return DoPublish(
+          upgradeDeps: upgradeDeps,
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
           publish: publish,
@@ -2589,6 +2611,7 @@ void main() {
         mockPublishedVersion();
 
         final azurePublish = DoPublish(
+          upgradeDeps: upgradeDeps,
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
           publish: publish,
@@ -2757,6 +2780,7 @@ void main() {
         ).thenThrow(Exception('Merge was rejected'));
 
         final mergeFirstPublish = DoPublish(
+          upgradeDeps: upgradeDeps,
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
           publish: publish,
@@ -2923,6 +2947,7 @@ void main() {
         EditMessage? editMessage,
         ConfirmDeleteFeatureBranch? confirmDeleteFeatureBranch,
       }) => DoPublish(
+        upgradeDeps: upgradeDeps,
         waitUntilPublished: waitUntilPublished,
         ggLog: ggLog,
         publish: publish,
@@ -3129,6 +3154,7 @@ void main() {
         );
 
         final strictPublish = DoPublish(
+          upgradeDeps: upgradeDeps,
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
           publish: publish,
@@ -3986,6 +4012,7 @@ void main() {
         mockPublishIsSuccessful(success: true, askBeforePublishing: false);
 
         final cliDoPublish = DoPublish(
+          upgradeDeps: upgradeDeps,
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
           publish: publish,
@@ -4047,6 +4074,7 @@ void main() {
         });
 
         final cliDoPublish = DoPublish(
+          upgradeDeps: upgradeDeps,
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
           publish: publish,
@@ -4092,6 +4120,7 @@ void main() {
         });
 
         final programmatic = DoPublish(
+          upgradeDeps: upgradeDeps,
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
           publish: publish,
@@ -4117,6 +4146,164 @@ void main() {
     });
 
     // .......................................................................
+    group('dependency upgrade', () {
+      // The upgrade sits right before »can publish«, so a mocked
+      // »can publish« that throws stops the run exactly behind the step
+      // under test — everything beyond it is covered by the tests above.
+      DoPublish publishStoppingAtCanPublish() {
+        final mockCanPublish = MockCanPublish();
+        when(
+          () => mockCanPublish.exec(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+            options: any(named: 'options'),
+          ),
+        ).thenAnswer((_) async => throw Exception('stop'));
+
+        return DoPublish(
+          upgradeDeps: upgradeDeps,
+          waitUntilPublished: waitUntilPublished,
+          ggLog: ggLog,
+          publish: publish,
+          canPublish: mockCanPublish,
+          configurePublish: makeConfigurePublish(),
+          publishedVersion: publishedVersion,
+          processWrapper: processWrapper,
+          localBranch: localBranch,
+          confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+          mergeFlow: noPubGetMergeFlow(),
+        );
+      }
+
+      test('runs »dart pub upgrade --tighten« before »can publish«', () async {
+        await expectLater(
+          publishStoppingAtCanPublish().exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+          ),
+          throwsA(isA<Exception>()),
+        );
+
+        verify(
+          () => upgradeDeps.exec(
+            directory: d,
+            ggLog: any(named: 'ggLog'),
+          ),
+        ).called(1);
+      });
+
+      test('commits what the upgrade changed', () async {
+        // The upgrade tightens the constraints in pubspec.yaml — a rewrite
+        // the publish has to commit before »can publish« reads the tree.
+        when(
+          () => upgradeDeps.exec(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+          ),
+        ).thenAnswer((_) async {
+          final pubspec = File(join(d.path, 'pubspec.yaml'));
+          await pubspec.writeAsString(
+            '${pubspec.readAsStringSync()}\n# tightened\n',
+          );
+        });
+
+        await expectLater(
+          publishStoppingAtCanPublish().exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+          ),
+          throwsA(isA<Exception>()),
+        );
+
+        final head = await Process.run('git', [
+          'log',
+          '-1',
+          '--pretty=%s',
+        ], workingDirectory: d.path);
+
+        expect(
+          head.stdout,
+          contains(
+            '${ggCommitPrefix}dart pub upgrade --major-versions '
+            '--tighten',
+          ),
+        );
+      });
+
+      test('writes no commit when everything is up to date', () async {
+        await expectLater(
+          publishStoppingAtCanPublish().exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+          ),
+          throwsA(isA<Exception>()),
+        );
+
+        // Other steps write their own bookkeeping commits, so the question
+        // is not whether HEAD moved — it is whether the upgrade added one.
+        final log = await Process.run('git', [
+          'log',
+          '--pretty=%s',
+        ], workingDirectory: d.path);
+
+        expect(log.stdout, isNot(contains('dart pub upgrade')));
+      });
+
+      test(
+        'is skipped when the caller upgrades itself (upgrade: false)',
+        () async {
+          await expectLater(
+            publishStoppingAtCanPublish().exec(
+              directory: d,
+              ggLog: ggLog,
+              askBeforePublishing: false,
+              deleteFeatureBranch: false,
+              upgrade: false,
+            ),
+            throwsA(isA<Exception>()),
+          );
+
+          verifyNever(
+            () => upgradeDeps.exec(
+              directory: any(named: 'directory'),
+              ggLog: any(named: 'ggLog'),
+            ),
+          );
+        },
+      );
+
+      test('is turned off by --no-upgrade on the command line', () async {
+        final runner = CommandRunner<void>('gg', 'gg')
+          ..addCommand(publishStoppingAtCanPublish());
+
+        await expectLater(
+          runner.run(<String>[
+            'publish',
+            '-i',
+            d.path,
+            '--no-upgrade',
+            '--no-ask-before-publishing',
+            '--no-delete-feature-branch',
+          ]),
+          throwsA(isA<Exception>()),
+        );
+
+        verifyNever(
+          () => upgradeDeps.exec(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+          ),
+        );
+      });
+    });
+
+    // .......................................................................
     group('for a hybrid (pubspec.yaml + package.json)', () {
       late File runtimeFile;
 
@@ -4133,6 +4320,7 @@ void main() {
 
       DoPublish makeResumePublish({SyncHybridVersions? syncHybridVersions}) =>
           DoPublish(
+            upgradeDeps: upgradeDeps,
             syncHybridVersions: syncHybridVersions,
             waitUntilPublished: waitUntilPublished,
             ggLog: ggLog,
@@ -4377,6 +4565,7 @@ void main() {
 
         await expectLater(
           DoPublish(
+            upgradeDeps: upgradeDeps,
             waitUntilPublished: waitUntilPublished,
             ggLog: ggLog,
             publish: publish,
@@ -4498,6 +4687,7 @@ void main() {
         ).thenAnswer((_) async => (version: Version(1, 2, 3), changed: true));
 
         await DoPublish(
+          upgradeDeps: upgradeDeps,
           syncHybridVersions: phantomSync,
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
@@ -4583,6 +4773,7 @@ void main() {
     test('should have a code coverage of 100%', () {
       expect(
         DoPublish(
+          upgradeDeps: upgradeDeps,
           waitUntilPublished: waitUntilPublished,
           ggLog: ggLog,
           configurePublish: makeConfigurePublish(),

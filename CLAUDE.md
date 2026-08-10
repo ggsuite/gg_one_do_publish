@@ -35,6 +35,35 @@ Because a merge-only run puts the branch on the main branch _without_ releasing 
 
 Note that a merge leaves no tag behind, so its work stays _unreleased_ on the main branch — and `gg did publish` says so, because no tag covers it.
 
+### Dependency upgrade before the release (`--no-upgrade`)
+
+Right before `can publish`, `do publish` runs gg_one_commit's `do upgrade deps`
+— »dart pub upgrade --major-versions --tighten« (and the node equivalent in a
+hybrid). A release has to ship the constraints that were actually resolved and
+tested: without this step pana rejects the upload for outdated dependencies, and
+the published manifest allows versions nobody ever built against. Its position
+is fixed by two neighbours: it runs **after** the `pubspec_overrides.yaml`
+deletion of Step 0b, so it resolves against the registry instead of the local
+working copies of a ticket workspace, and **before** `can publish`, whose pana
+sees the result.
+
+Whether anything changed is decided by the `GgState` content hash taken around
+the upgrade — not by »is the tree dirty?«, which would also answer yes for dirt
+the tree already carried. Only a real change is committed, as a system commit
+(»#gg: dart pub upgrade --major-versions --tighten«) carrying
+`GgState.doCommitKey`: the upgrade rewrote the manifest, which is exactly what
+the recorded »everything is committed« hash covers and what the `did commit`
+inside `can publish` reads right afterwards. An upgrade that finds everything up
+to date writes neither commit nor state — that would invalidate the recorded
+check results of a repository nobody touched.
+
+A resumed run skips the upgrade for the same reason it skips `can publish`: its
+version is bumped and possibly uploaded, and re-resolving would rewrite a
+mid-publish state. `--no-upgrade` (parameter `upgrade: false`) turns it off;
+gg_multi's `do publish` passes it, because the ticket-wide flow upgrades every
+repo itself, in dependency order, so »--tighten« resolves against the sibling
+versions the same run published earlier.
+
 ### Publish flow (`do_publish` + `do_configure_publish`)
 
 **The release order is: merge FIRST, upload SECOND.** After the version bump the `doCommit` and `doPush` states are recorded immediately before the merge (so the merge itself carries them into the default branch — in the pull-request flow the provider merges main and gg cannot push a fix afterwards; in the local flow main is pushed as a bare ref on which no state could be written), the feature branch is merged into the default branch (and, in the local-merge flow, main is pushed right away — `git push origin <main>`, no checkout), and only then is the package uploaded to its registries — **from the feature branch**, whose content the merge made identical to the default branch, so the upload's lock-file bookkeeping never sits on a local main that gg cannot push in the pull-request flow. A merge that is refused (rejected pull request, protected branch, conflict) therefore stops the release while the registries are untouched — the reverse order left versions on pub.dev/npm that never reached main, and a registry cannot take an upload back; the merged-but-not-yet-uploaded state is simply resumed with `--continue`. After the upload (and the registry-visibility wait) the default branch is checked out to tag the release and push the tags, then the feature branch is checked out again and the workspace overrides (`pubspec_overrides.yaml` / `pnpm-workspace.yaml`) are restored from their `.gg/` backups, so work on the ticket can continue.
