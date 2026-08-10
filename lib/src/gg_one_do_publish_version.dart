@@ -9,4 +9,4 @@
 // coverage:ignore-file
 
 /// The version of the `gg_one_do_publish` package.
-const String ggOneDoPublishVersion = '2.4.3';
+const String ggOneDoPublishVersion = '2.5.0';
