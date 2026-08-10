@@ -2988,6 +2988,28 @@ void main() {
         );
       });
 
+      test('--continue resumes a run that failed before its first '
+          'step', () async {
+        // The regression this guards: a run that died in `can publish`
+        // records no step, only the answers. Resuming is then a normal run —
+        // refusing it would be a dead end.
+        await RepoPublishConfig(
+          versionIncrement: VersionIncrement.patch,
+          mergeMessage: 'm',
+        ).save(file: DoConfigurePublish.configFileFor(d));
+
+        final runner = CommandRunner<void>('gg', 'gg')..addCommand(doPublish);
+        // It gets past the guard — whatever the half-stubbed flow fails on
+        // afterwards, it is no longer »nothing to continue«.
+        Object? error;
+        try {
+          await runner.run(['publish', '-i', d.path, '--continue']);
+        } catch (e) {
+          error = e;
+        }
+        expect(rmControls('$error'), isNot(contains('Nothing to continue')));
+      });
+
       test('--continue rejects --config and --restart', () async {
         Matcher throwsCombineError() => throwsA(
           isA<Exception>().having(

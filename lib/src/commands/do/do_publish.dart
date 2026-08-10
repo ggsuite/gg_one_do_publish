@@ -265,11 +265,20 @@ class DoPublish extends DirCommand<void> {
     final configFile = DoConfigurePublish.configFileFor(directory);
     final stateFile = DoConfigurePublish.stateFileFor(directory);
     var files = loadRepoPublishFiles(directory);
-    if (cliContinue && !files.state.hasStepProgress) {
+    // A run that failed before its first step — in `can publish`, the push,
+    // the version sync — records no progress, and resuming it is simply a
+    // normal run. Refusing that would turn a harmless no-op into a dead end,
+    // so the answers `do configure-publish` left behind are enough.
+    final hasSomething =
+        files.state.hasStepProgress ||
+        files.config.mergeMessage != null ||
+        files.config.versionIncrement != null;
+    if (cliContinue && !hasSomething) {
       throw Exception(
         cError(
-          'Nothing to continue: ${stateFile.path} records no progress. Start '
-          'a normal "gg do publish" first.',
+          'Nothing to continue: ${directory.path} has no publish '
+          'configuration and no recorded progress. Start a normal '
+          '"gg do publish" first.',
         ),
       );
     }
