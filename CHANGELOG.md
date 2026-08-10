@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.2 - 2026-08-10
+
+### Fixed
+
+- Various fixes
+
 ## 2.4.1 - 2026-08-10
 
 ### Removed
