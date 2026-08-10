@@ -425,7 +425,7 @@ class DoPublish extends DirCommand<void> {
     // explicit --config without it) leaves the decision open — ask NOW,
     // before anything irreversible runs. In non-interactive environments the
     // default prompt fails fast instead of hanging.
-    resolvedDelete ??= _confirmDeleteFeatureBranch(featureBranch);
+    resolvedDelete ??= await _confirmDeleteFeatureBranch(featureBranch);
 
     // Step 5: Persist the resolved config (+ carried-over progress) as the
     // runtime file — the resume anchor for this run. The delete decision is

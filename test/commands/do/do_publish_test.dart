@@ -69,7 +69,7 @@ void main() {
     return initialMessage;
   }
 
-  bool defaultConfirmDeleteFeatureBranch(String branchName) {
+  Future<bool> defaultConfirmDeleteFeatureBranch(String branchName) async {
     return false;
   }
 
@@ -207,7 +207,7 @@ void main() {
       publishedVersion: publishedVersion,
       processWrapper: processWrapper,
       localBranch: localBranch,
-      confirmDeleteFeatureBranch: (_) => false,
+      confirmDeleteFeatureBranch: (_) async => false,
       mergeFlow: noPubGetMergeFlow(),
     );
 
@@ -1468,7 +1468,7 @@ void main() {
               // The decision is asked by configure-publish — before the
               // publish pipeline starts, never between its steps.
               configurePublish: makeConfigurePublish(
-                confirmDeleteFeatureBranch: (branchName) {
+                confirmDeleteFeatureBranch: (branchName) async {
                   promptBranchName = branchName;
                   return true;
                 },
@@ -1476,7 +1476,7 @@ void main() {
               publishedVersion: publishedVersion,
               processWrapper: processWrapper,
               localBranch: localBranch,
-              confirmDeleteFeatureBranch: (_) =>
+              confirmDeleteFeatureBranch: (_) async =>
                   fail('DoPublish itself must not prompt here.'),
               mergeFlow: noPubGetMergeFlow(),
             );
@@ -1532,7 +1532,7 @@ void main() {
                 publishedVersion: publishedVersion,
                 processWrapper: processWrapper,
                 localBranch: localBranch,
-                confirmDeleteFeatureBranch: (branchName) {
+                confirmDeleteFeatureBranch: (branchName) async {
                   promptBranchName = branchName;
                   return true;
                 },
@@ -1585,7 +1585,7 @@ void main() {
               publishedVersion: publishedVersion,
               processWrapper: processWrapper,
               localBranch: localBranch,
-              confirmDeleteFeatureBranch: (_) =>
+              confirmDeleteFeatureBranch: (_) async =>
                   fail('The config decides — no prompt allowed.'),
               mergeFlow: noPubGetMergeFlow(),
             );
@@ -1627,7 +1627,7 @@ void main() {
               publishedVersion: publishedVersion,
               processWrapper: processWrapper,
               localBranch: localBranch,
-              confirmDeleteFeatureBranch: (_) {
+              confirmDeleteFeatureBranch: (_) async {
                 fail('Prompt must not be used when flag is provided.');
               },
               mergeFlow: noPubGetMergeFlow(),
@@ -1698,7 +1698,7 @@ void main() {
               localBranch: localBranch,
               // delete_feature_branch comes from the --config file — no
               // prompt and no CLI flag needed.
-              confirmDeleteFeatureBranch: (_) =>
+              confirmDeleteFeatureBranch: (_) async =>
                   fail('The --config file decides — no prompt allowed.'),
               mergeFlow: noPubGetMergeFlow(),
             );
@@ -1749,7 +1749,7 @@ void main() {
               publishedVersion: publishedVersion,
               processWrapper: processWrapper,
               localBranch: localBranch,
-              confirmDeleteFeatureBranch: (_) => false,
+              confirmDeleteFeatureBranch: (_) async => false,
               mergeFlow: noPubGetMergeFlow(),
             );
 
@@ -1797,7 +1797,7 @@ void main() {
                 publishedVersion: publishedVersion,
                 processWrapper: processWrapper,
                 localBranch: localBranch,
-                confirmDeleteFeatureBranch: (_) {
+                confirmDeleteFeatureBranch: (_) async {
                   fail('Prompt must not be used when flag is provided.');
                 },
                 mergeFlow: noPubGetMergeFlow(),
@@ -3269,7 +3269,7 @@ void main() {
           // as parameters, the open delete decision comes from the runtime
           // file — no prompt.
           final resumePublish = makeResumePublish(
-            confirmDeleteFeatureBranch: (_) =>
+            confirmDeleteFeatureBranch: (_) async =>
                 fail('The stored decision applies — no prompt.'),
           );
           await resumePublish.exec(
@@ -3400,7 +3400,7 @@ void main() {
           final runner = CommandRunner<void>('gg', 'gg')
             ..addCommand(
               makeResumePublish(
-                confirmDeleteFeatureBranch: (_) =>
+                confirmDeleteFeatureBranch: (_) async =>
                     fail('The stored decision applies — no prompt on resume.'),
               ),
             );
@@ -4029,7 +4029,7 @@ void main() {
           publishedVersion: publishedVersion,
           processWrapper: processWrapper,
           localBranch: localBranch,
-          confirmDeleteFeatureBranch: (_) => false,
+          confirmDeleteFeatureBranch: (_) async => false,
           mergeFlow: noPubGetMergeFlow(),
         );
 
