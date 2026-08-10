@@ -15,10 +15,10 @@ dependencies:
   gg_git: ^4.1.1
   gg_lang: ^0.5.0
   gg_log: ^1.0.6
-  gg_merge: ^3.2.1
+  gg_merge: ^3.3.0
   gg_one_commit: ^2.2.2
-  gg_one_core: ^2.3.2
-  gg_one_merge: ^2.3.2
+  gg_one_core: ^2.4.0
+  gg_one_merge: ^2.4.0
   gg_process: ^1.1.6
   gg_publish: ^4.3.1
   gg_status_printer: ^1.4.2
