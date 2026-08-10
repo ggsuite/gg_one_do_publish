@@ -16,8 +16,8 @@ dependencies:
   gg_lang: ^0.5.0
   gg_log: ^1.0.6
   gg_merge: ^3.2.0
-  gg_one_commit: ^2.2.0
-  gg_one_core: ^2.3.0
+  gg_one_commit: ^2.2.1
+  gg_one_core: ^2.3.1
   gg_one_merge: ^2.3.0
   gg_process: ^1.1.6
   gg_publish: ^4.3.0
