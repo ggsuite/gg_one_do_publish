@@ -249,26 +249,46 @@ class DoPublish extends DirCommand<void> {
     }
     _deletePubspecOverrides(directory: directory, ggLog: ggLog);
 
-    // Step 1: Read the runtime .gg/gg-publish.json (config + progress).
-    final runtimeFile = DoConfigurePublish.configFileFor(directory);
-    if (cliContinue && !runtimeFile.existsSync()) {
+    // Step 1: Read the answers (.gg/publish_config.json) and the progress of
+    // a previous run (.gg/publish_state.json). A leftover legacy
+    // .gg/gg-publish.json is split into the two halves so a ticket that was
+    // in flight across the upgrade stays resumable.
+    final configFile = DoConfigurePublish.configFileFor(directory);
+    final stateFile = DoConfigurePublish.stateFileFor(directory);
+    var files = loadRepoPublishFiles(directory);
+    if (cliContinue && !files.state.hasStepProgress) {
       throw Exception(
         cError(
-          'Nothing to continue: ${runtimeFile.path} does not exist. Start a '
-          'normal "gg do publish" first.',
+          'Nothing to continue: ${stateFile.path} records no progress. Start '
+          'a normal "gg do publish" first.',
         ),
       );
     }
-    if (restart && runtimeFile.existsSync()) {
-      // Explicit user choice: discard the previous config and progress.
-      runtimeFile.deleteSync();
+    // Drops everything the previous run recorded. The legacy file goes with
+    // it: it carries progress *and* answers in one, so leaving it behind
+    // would resurrect the very progress that was just discarded.
+    void discardProgress() {
+      if (stateFile.existsSync()) {
+        stateFile.deleteSync();
+      }
+      final legacy = legacyPublishConfigFile(directory);
+      if (legacy.existsSync()) {
+        legacy.deleteSync();
+      }
     }
-    PublishConfig? runtimeConfig = runtimeFile.existsSync()
-        ? PublishConfig.load(
-            configArg: runtimeFile.path,
-            fallbackDir: directory.path,
-          )
+
+    if (restart) {
+      // Explicit user choice: discard the progress of the previous run. The
+      // answers stay — they are what the user chose, not what the run did.
+      discardProgress();
+      files = (config: files.config, state: PublishState());
+    }
+    RepoPublishConfig? runtimeConfig =
+        configFile.existsSync() ||
+            legacyPublishConfigFile(directory).existsSync()
+        ? files.config
         : null;
+    PublishState runtimeState = files.state;
 
     // Step 1b: Progress that was recorded on a DIFFERENT feature branch does
     // not belong to this publish — it is a leftover that arrived with a copy
@@ -279,8 +299,8 @@ class DoPublish extends DirCommand<void> {
     // discard it. Progress found while HEAD is on the default branch is
     // kept: a resumed run whose merge already happened legitimately sits
     // there.
-    if (runtimeConfig != null && runtimeConfig.hasStepProgress) {
-      final staleBranch = runtimeConfig.branch;
+    if (runtimeState.hasStepProgress) {
+      final staleBranch = runtimeState.branch;
       final currentBranch = await _localBranch.get(
         directory: directory,
         ggLog: <String>[].add,
@@ -290,10 +310,10 @@ class DoPublish extends DirCommand<void> {
       if (staleBranch != null &&
           staleBranch != currentBranch &&
           !onDefaultBranch) {
-        runtimeFile.deleteSync();
-        runtimeConfig = null;
+        discardProgress();
+        runtimeState = PublishState();
         final notice =
-            'The progress in ${runtimeFile.path} belongs to the branch '
+            'The progress in ${stateFile.path} belongs to the branch '
             '"$staleBranch", but the current branch is "$currentBranch". '
             'The file is a stale leftover of another publish and was '
             'discarded.';
@@ -312,14 +332,13 @@ class DoPublish extends DirCommand<void> {
     // A resumed run continues at the first step that is not done yet.
     // gg_multi forwards its own --continue via [resume].
     final resuming =
-        (cliContinue || (resume ?? false)) &&
-        (runtimeConfig?.hasStepProgress ?? false);
+        (cliContinue || (resume ?? false)) && runtimeState.hasStepProgress;
 
-    if (!resuming && (runtimeConfig?.hasStepProgress ?? false)) {
+    if (!resuming && runtimeState.hasStepProgress) {
       throw Exception(
         cError(
           unfinishedPublishMessage(
-            path: runtimeFile.path,
+            path: stateFile.path,
             command: 'gg do publish',
           ),
         ),
@@ -365,18 +384,16 @@ class DoPublish extends DirCommand<void> {
         resolvedChannel ??= config.channel;
         resolvedDelete ??= config.deleteFeatureBranch;
         resolvedPr ??= config.pr;
-      } else if (runtimeConfig != null) {
-        final resolved = runtimeConfig.resolveSingle(
-          configPath: runtimeFile.path,
-          requireVersionIncrement: needsIncrement,
-        );
-        resolvedIncrement ??= resolved.versionIncrement;
-        resolvedMessage ??= resolved.mergeMessage;
-        resolvedChannel ??= runtimeConfig.channel;
-        resolvedDelete ??= runtimeConfig.deleteFeatureBranch;
-        resolvedPr ??= runtimeConfig.pr;
+      } else if (runtimeConfig != null &&
+          runtimeConfig.mergeMessage != null &&
+          (!needsIncrement || runtimeConfig.versionIncrement != null)) {
+        resolvedIncrement ??= runtimeConfig.versionIncrement?.name;
+        resolvedMessage ??= runtimeConfig.mergeMessage;
+        resolvedChannel ??= runtimeState.channel;
+        resolvedDelete ??= runtimeState.deleteFeatureBranch;
+        resolvedPr ??= runtimeState.pr;
       } else {
-        final config = await _configurePublish.configure(
+        final configured = await _configurePublish.configure(
           directory: directory,
           ggLog: ggLog,
           versionIncrement: resolvedIncrement,
@@ -384,18 +401,18 @@ class DoPublish extends DirCommand<void> {
           deleteFeatureBranch: resolvedDelete,
           mergeOnly: isMergeOnly,
         );
-        resolvedIncrement = config.versionIncrement;
-        resolvedMessage = config.mergeMessage;
-        resolvedChannel ??= config.channel;
-        resolvedDelete ??= config.deleteFeatureBranch;
+        resolvedIncrement = configured.config.versionIncrement?.name;
+        resolvedMessage = configured.config.mergeMessage;
+        resolvedChannel ??= configured.state.channel;
+        resolvedDelete ??= configured.state.deleteFeatureBranch;
       }
     } else {
       // Increment + message came as parameters, only the channel, delete and
-      // pr decisions may be open — read them from the config file when one is
+      // pr decisions may be open — read them from the state file when one is
       // present.
-      resolvedChannel ??= runtimeConfig?.channel;
-      resolvedDelete ??= runtimeConfig?.deleteFeatureBranch;
-      resolvedPr ??= runtimeConfig?.pr;
+      resolvedChannel ??= runtimeState.channel;
+      resolvedDelete ??= runtimeState.deleteFeatureBranch;
+      resolvedPr ??= runtimeState.pr;
     }
     resolvedChannel ??= 'stable';
     resolvedPr ??= true;
@@ -409,7 +426,7 @@ class DoPublish extends DirCommand<void> {
     // first step (e.g. in canPublish) must not pin a stale branch that a
     // later publish of a different branch would then delete.
     final featureBranch =
-        (resuming ? runtimeConfig?.branch : null) ??
+        (resuming ? runtimeState.branch : null) ??
         await _localBranch.get(directory: directory, ggLog: <String>[].add);
 
     // A config source that predates the delete_feature_branch field (or an
@@ -418,23 +435,32 @@ class DoPublish extends DirCommand<void> {
     // default prompt fails fast instead of hanging.
     resolvedDelete ??= _confirmDeleteFeatureBranch(featureBranch);
 
-    // Step 5: Persist the resolved config (+ carried-over progress) as the
-    // runtime file — the resume anchor for this run. The delete decision is
-    // stored too, so a resumed run never has to re-ask.
-    var progress = PublishConfig(
-      versionIncrement: resolvedIncrement,
+    // Step 5: Persist the resolved answers and the run state. The state file
+    // is the resume anchor of this run; the config file keeps the answers the
+    // user gave, so a `--restart` can drop the state without asking again.
+    // The delete decision is state, not an answer about the release content —
+    // a resumed run must never re-ask it.
+    await RepoPublishConfig(
       mergeMessage: resolvedMessage,
+      versionIncrement: resolvedIncrement == null
+          ? null
+          : parseVersionIncrement(resolvedIncrement),
+      nextCommitMessage: runtimeConfig?.nextCommitMessage,
+      commits: runtimeConfig?.commits,
+    ).save(file: configFile);
+
+    var progress = PublishState(
       channel: resolvedChannel,
       deleteFeatureBranch: resolvedDelete,
       pr: resolvedPr,
       branch: featureBranch,
-      doneSteps: resuming ? runtimeConfig!.doneSteps : null,
+      doneSteps: resuming ? runtimeState.doneSteps : null,
     );
-    await progress.save(file: runtimeFile);
+    await progress.save(file: stateFile);
 
     Future<void> markStepDone(String step) async {
       progress = progress.withStepDone(step);
-      await progress.save(file: runtimeFile);
+      await progress.save(file: stateFile);
     }
 
     // Step 5b: A hybrid carries two version numbers describing one artifact,
@@ -594,6 +620,16 @@ class DoPublish extends DirCommand<void> {
         key: _doPush.stateKey,
         ignoreUnstaged: true,
       );
+
+      // The answers describe work in progress on a feature branch — they have
+      // no business on the default branch. Both files are gitignored, so this
+      // is about not leaving them behind rather than about a clean tree; the
+      // deletion happens BEFORE the merge anyway, so a repository whose
+      // gitignore entry is missing cannot land the file on main either. The
+      // state file survives — it is what a `--continue` resumes from.
+      if (configFile.existsSync()) {
+        configFile.deleteSync();
+      }
 
       await _merge(
         directory: directory,
@@ -761,9 +797,12 @@ class DoPublish extends DirCommand<void> {
       );
     }
 
-    // Step 13: Fully published — the runtime file has served its purpose.
-    if (runtimeFile.existsSync()) {
-      runtimeFile.deleteSync();
+    // Step 13: Fully published — the run state has served its purpose. The
+    // config file went before the merge; a legacy leftover goes here so an
+    // upgraded ticket does not keep a file nobody reads any more.
+    discardProgress();
+    if (configFile.existsSync()) {
+      configFile.deleteSync();
     }
   }
 

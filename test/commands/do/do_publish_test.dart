@@ -4119,6 +4119,7 @@ void main() {
     // .......................................................................
     group('for a hybrid (pubspec.yaml + package.json)', () {
       late File runtimeFile;
+      late File stateFile;
 
       AddVersionTag mockAddVersionTag() {
         final tag = _MockAddVersionTag();
@@ -4166,7 +4167,35 @@ void main() {
 
       setUp(() {
         runtimeFile = DoConfigurePublish.configFileFor(d);
+        stateFile = DoConfigurePublish.stateFileFor(d);
       });
+
+      /// Writes the answers and the run progress of an interrupted publish.
+      void writeResumeFixture({
+        String versionIncrement = 'patch',
+        String mergeMessage = 'm',
+        String? channel,
+        required List<String> doneSteps,
+      }) {
+        runtimeFile
+          ..createSync(recursive: true)
+          ..writeAsStringSync(
+            RepoPublishConfig(
+              mergeMessage: mergeMessage,
+              versionIncrement: parseVersionIncrement(versionIncrement),
+            ).toJsonString(),
+          );
+        stateFile
+          ..createSync(recursive: true)
+          ..writeAsStringSync(
+            PublishState(
+              branch: 'feat_abc',
+              channel: channel,
+              deleteFeatureBranch: false,
+              doneSteps: doneSteps,
+            ).toJsonString(),
+          );
+      }
 
       /// Turns the fixture into a hybrid. [packageJsonVersion] drives the
       /// reconciliation; [publishTo] takes the Dart side off pub.dev.
@@ -4262,15 +4291,9 @@ void main() {
           ),
         ).thenAnswer((_) async => Version(1, 2, 2));
 
-        runtimeFile.writeAsStringSync('''
-{
-  "version_increment": "patch",
-  "merge_message": "m",
-  "branch": "feat_abc",
-  "delete_feature_branch": false,
-  "done_steps": ["prepare_version", "publish_registry_pub_dev"]
-}
-''');
+        writeResumeFixture(
+          doneSteps: ['prepare_version', 'publish_registry_pub_dev'],
+        );
 
         Set<PublishTarget>? requested;
         when(
@@ -4309,15 +4332,7 @@ void main() {
         publishedVersionValue = Version(1, 2, 3);
         mockPublishedVersion();
 
-        runtimeFile.writeAsStringSync('''
-{
-  "version_increment": "patch",
-  "merge_message": "m",
-  "branch": "feat_abc",
-  "delete_feature_branch": false,
-  "done_steps": ["prepare_version", "publish_registry"]
-}
-''');
+        writeResumeFixture(doneSteps: ['prepare_version', 'publish_registry']);
 
         // Both registries already carry the un-bumped version, so the safety
         // net skips the upload without trusting the marker.
@@ -4421,16 +4436,7 @@ void main() {
         publishedVersionValue = Version(1, 2, 3);
         mockPublishedVersion();
 
-        runtimeFile.writeAsStringSync('''
-{
-  "version_increment": "patch",
-  "channel": "rc",
-  "merge_message": "m",
-  "branch": "feat_abc",
-  "delete_feature_branch": false,
-  "done_steps": ["prepare_version"]
-}
-''');
+        writeResumeFixture(channel: 'rc', doneSteps: ['prepare_version']);
         // The bump already happened, so both manifests carry the rc.
         File(join(d.path, 'pubspec.yaml')).writeAsStringSync(
           File(join(d.path, 'pubspec.yaml')).readAsStringSync().replaceFirst(
@@ -4549,16 +4555,14 @@ void main() {
           ),
         ).thenAnswer((_) async => null);
 
-        runtimeFile.writeAsStringSync('''
-{
-  "version_increment": "patch",
-  "merge_message": "m",
-  "branch": "feat_abc",
-  "delete_feature_branch": false,
-  "done_steps": ["prepare_version", "publish_registry_pub_dev",
-                 "publish_registry_npm", "merge"]
-}
-''');
+        writeResumeFixture(
+          doneSteps: [
+            'prepare_version',
+            'publish_registry_pub_dev',
+            'publish_registry_npm',
+            'merge',
+          ],
+        );
 
         await expectLater(
           makeResumePublish(syncHybridVersions: noSync).exec(
