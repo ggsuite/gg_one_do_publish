@@ -233,6 +233,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.6"
+  gg_json:
+    dependency: transitive
+    description:
+      name: gg_json
+      sha256: "91fc6a659599451154d4b97854614a9f732eda56bfec654a6f15e989c0462f01"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.0.1"
   gg_lang:
     dependency: "direct main"
     description:
