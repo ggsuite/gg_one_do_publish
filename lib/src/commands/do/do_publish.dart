@@ -29,6 +29,19 @@ import 'package:gg_one_merge/gg_one_merge.dart';
 
 /// Publishes the current directory.
 ///
+/// The release order is: merge FIRST, upload SECOND. After the version bump
+/// the »doCommit« and »doPush« states are recorded immediately before
+/// the merge (so the merge carries them into the default branch), the
+/// feature branch is merged into the default branch, and only then is the
+/// package uploaded to its registries — from the feature branch, whose
+/// content the merge made identical to the default branch. A merge that is
+/// refused therefore stops the release while the registries are untouched;
+/// the reverse order left versions on pub.dev/npm that never reached main,
+/// and a registry cannot take an upload back. After the upload the default
+/// branch is checked out to tag the release, then the feature branch is
+/// checked out again and the workspace overrides are restored, so work on
+/// the ticket can simply continue.
+///
 /// All interactive decisions (version increment, merge message, feature
 /// branch deletion) are resolved up front — from explicit parameters,
 /// `--config`, an existing `.gg/gg-publish.json` or an automatic
@@ -58,6 +71,9 @@ import 'package:gg_one_merge/gg_one_merge.dart';
 ///   version instead of the stable release.
 /// - `--continue` reuses `.gg/gg-publish.json` and skips the steps that are
 ///   already done; `--restart` discards config *and* progress.
+/// - `--no-upgrade` skips the »dart pub upgrade --major-versions --tighten«
+///   that otherwise runs right before `can publish` — for callers like
+///   gg_multi that upgrade the whole ticket themselves.
 class DoPublish extends DirCommand<void> {
   /// Constructor
   DoPublish({
@@ -71,7 +87,7 @@ class DoPublish extends DirCommand<void> {
     AddTypeScriptVersionTag? addTypeScriptVersionTag,
     AddGitOnlyVersionTag? addGitOnlyVersionTag,
     RemoveVersionTag? removeVersionTag,
-    Commit? commit,
+    GgSystemCommit? systemCommit,
     DoPush? doPush,
     DidCommit? didCommit,
     PrepareNextVersion? prepareNextVersion,
@@ -88,6 +104,8 @@ class DoPublish extends DirCommand<void> {
     DoConfigurePublish? configurePublish,
     EnsurePublishConfigIgnored? ensureIgnored,
     WaitUntilPublished? waitUntilPublished,
+    SyncHybridVersions? syncHybridVersions,
+    DoUpgradeDeps? upgradeDeps,
     // coverage:ignore-start
   }) : _canPublish = canPublish ?? CanPublish(ggLog: ggLog),
        _publishToPubDev = publish ?? Publish(ggLog: ggLog),
@@ -108,7 +126,7 @@ class DoPublish extends DirCommand<void> {
        // Like _addVersionTag: operates on the real repo, not through the
        // command's own process wrapper.
        _removeVersionTag = removeVersionTag ?? RemoveVersionTag(ggLog: ggLog),
-       _commit = commit ?? Commit(ggLog: ggLog),
+       _systemCommit = systemCommit ?? GgSystemCommit(ggLog: ggLog),
        _doPush = doPush ?? DoPush(ggLog: ggLog),
        _didCommit = didCommit ?? DidCommit(ggLog: ggLog),
        _prepareNextVersion =
@@ -129,19 +147,21 @@ class DoPublish extends DirCommand<void> {
        _ensureIgnored =
            ensureIgnored ?? EnsurePublishConfigIgnored(ggLog: ggLog),
        _waitUntilPublished =
-           waitUntilPublished ?? WaitUntilPublished(ggLog: ggLog) {
+           waitUntilPublished ?? WaitUntilPublished(ggLog: ggLog),
+       _syncHybridVersions =
+           syncHybridVersions ?? SyncHybridVersions(ggLog: ggLog),
+       _upgradeDeps = upgradeDeps ?? DoUpgradeDeps(ggLog: ggLog) {
     // coverage:ignore-end
     _addArgs();
   }
 
   /// The key used to save the "all changes committed" state (read back by
   /// »gg did commit«, e.g. in CI).
-  final String stateKeyDoCommit = 'doCommit';
+  final String stateKeyDoCommit = GgState.doCommitKey;
 
   /// The key used to save the "this state is published" state (read back by
   /// »gg did publish« and by the multi-repo flow, which uses it to tell
   /// released repos from ones that still carry unpublished work).
-  final String stateKeyDidPublish = 'didPublish';
 
   @override
   Future<void> exec({
@@ -157,6 +177,8 @@ class DoPublish extends DirCommand<void> {
     bool? pr,
     bool? mergeOnly,
     bool? force,
+    bool? upgrade,
+    Map<String, dynamic> options = const {},
   }) => get(
     directory: directory,
     ggLog: ggLog,
@@ -170,6 +192,8 @@ class DoPublish extends DirCommand<void> {
     pr: pr,
     mergeOnly: mergeOnly,
     force: force,
+    upgrade: upgrade,
+    pana: options[panaOption] as bool?,
   );
 
   @override
@@ -186,8 +210,12 @@ class DoPublish extends DirCommand<void> {
     bool? pr,
     bool? mergeOnly,
     bool? force,
+    bool? upgrade,
+    bool? pana,
   }) async {
     final isVerbose = verbose ?? _verboseFromArgs;
+    var usePana = pana ?? _panaFromArgs;
+    final useUpgrade = upgrade ?? _upgradeFromArgs;
     final isMergeOnly = mergeOnly ?? _mergeOnlyFromArgs;
     final isForce = force ?? _forceFromArgs;
     _publishedVersion ??= PublishedVersion(ggLog: ggLog);
@@ -418,6 +446,90 @@ class DoPublish extends DirCommand<void> {
       await progress.save(file: runtimeFile);
     }
 
+    // Step 5b: A hybrid carries two version numbers describing one artifact,
+    // and nothing keeps them together — they drift. Reconcile them to the
+    // higher one before anything reads a version, and commit the result so
+    // `did commit` inside `can publish` does not trip over the dirty manifest.
+    //
+    // A merge-only run releases nothing and therefore touches no version.
+    if (!isMergeOnly) {
+      final synced = await _syncHybridVersions.apply(
+        directory: directory,
+        ggLog: ggLog,
+      );
+
+      if (synced?.changed ?? false) {
+        await _commitVersionSync(
+          directory: directory,
+          ggLog: noLog,
+          version: synced!.version,
+        );
+
+        // The reconciled version has no CHANGELOG.md section yet, which pana
+        // rejects. Skipping it is what keeps such a publish possible at all —
+        // the alternative is an abort the user can only resolve by hand.
+        if (usePana) {
+          usePana = false;
+          ggLog(
+            cWarn(
+              'Publishing without pana: the manifests disagreed on the '
+              'version and were reconciled to ${synced.version}.',
+            ),
+          );
+        }
+      }
+    }
+
+    // Step 5c: Upgrade and tighten the dependencies — »dart pub upgrade
+    // --major-versions --tighten«. A release must ship the constraints that
+    // were actually resolved and tested: without this step pana rejects the
+    // upload for outdated dependencies, and the published manifest allows
+    // versions nobody ever built against. It runs AFTER the
+    // pubspec_overrides.yaml deletion of Step 0b, so it resolves against the
+    // registry and not against the local working copies of a ticket
+    // workspace, and BEFORE `can publish`, whose pana sees the result.
+    //
+    // A resumed run skips it for the same reason it skips `can publish`: its
+    // version is bumped and possibly uploaded already, and re-resolving would
+    // rewrite a mid-publish state. gg_multi's `do publish` upgrades every
+    // ticket repo itself, in dependency order, and turns this off with
+    // »upgrade: false« instead of resolving each repo twice.
+    if (!resuming && useUpgrade) {
+      // The hash covers the content of the working tree, so it answers
+      // whether the upgrade changed anything — and it answers it about the
+      // upgrade alone, not about dirt the tree already carried. An upgrade
+      // that found everything up to date must write no commit and no state:
+      // that would invalidate the recorded check results of a repository
+      // nobody touched.
+      final hashBefore = await _state.currentHash(
+        directory: directory,
+        ggLog: <String>[].add,
+      );
+
+      await _upgradeDeps.exec(directory: directory, ggLog: ggLog);
+
+      final hashAfter = await _state.currentHash(
+        directory: directory,
+        ggLog: <String>[].add,
+      );
+
+      if (hashAfter != hashBefore) {
+        // The upgrade rewrote pubspec.yaml and pubspec.lock — `can publish`
+        // contains `did commit` and would refuse over the dirty tree. The
+        // recorded hash covers exactly this content, so it is written anew.
+        // Anything else the tree carries is the user's and gets its own,
+        // prefix-less commit first.
+        await _systemCommit.commit(
+          directory: directory,
+          ggLog: ggLog,
+          message:
+              '${ggCommitPrefix}dart pub upgrade --major-versions --tighten',
+          userCommitMessage: readTicketDescriptionForRepo,
+          stateKey: GgState.doCommitKey,
+        );
+      }
+    }
+
     // Step 6: Validate. The full `can publish` is skipped when resuming —
     // after a partial publish (version bumped, possibly merged) its checks
     // would fail although the remaining steps are perfectly resumable. But
@@ -442,7 +554,11 @@ class DoPublish extends DirCommand<void> {
         );
       }
     } else {
-      await _canPublish.exec(directory: directory, ggLog: ggLog);
+      await _canPublish.exec(
+        directory: directory,
+        ggLog: ggLog,
+        options: <String, dynamic>{panaOption: usePana},
+      );
     }
 
     // The final merge goes through an auto-merge pull request by default
@@ -454,26 +570,24 @@ class DoPublish extends DirCommand<void> {
     final viaPullRequest =
         resolvedPr && await _pullRequestFlowSupported(directory);
 
-    // A resumed run whose merge already happened may still sit on the
-    // feature branch (gg_multi checks it out again after a failure). Move to
-    // the default branch BEFORE the first push, so no push resurrects the
-    // possibly already-deleted remote feature branch and push/tag target the
-    // release commit.
-    if (resuming && progress.isStepDone('merge') && !viaPullRequest) {
-      await _checkoutDefaultBranch(directory);
-    }
-
-    // Drop the ticket marker (written by `gg do add`) BEFORE version bump and
-    // registry upload — the upload happens before the merge, so the
-    // merge-time removal alone would ship `.gg/ticket.json` to pub.dev/npm
-    // inside the published package. Idempotent, so resumes are safe.
+    // Drop the ticket marker (written by `gg do add`) BEFORE the version
+    // bump: the marker must neither ride into the release commits the merge
+    // puts on the default branch nor ship inside the package the registry
+    // upload publishes from the feature branch afterwards. Idempotent, so
+    // resumes are safe.
     await _mergeFlow.removeTicketJson(
       directory: directory,
       ggLog: ggLog,
       verbose: isVerbose,
     );
 
-    await _doPush.gitPush(directory: directory, force: false);
+    // Push the feature branch — but only while the merge is still open: a
+    // resumed run whose merge already happened has nothing new to offer
+    // here, and the push would resurrect the possibly already-deleted
+    // remote feature branch.
+    if (!progress.isStepDone('merge')) {
+      await _doPush.gitPush(directory: directory, force: false);
+    }
 
     // A merge-only run stops short of every release artifact. Announced once,
     // because a run that ends without a release looks like a failed publish
@@ -499,71 +613,47 @@ class DoPublish extends DirCommand<void> {
       await markStepDone('prepare_version');
     }
 
-    // Step 8: Publish to the registry (pub.dev/npm). The registry lookup is
-    // a safety net: a version that is already visible must not be published
-    // again on a resumed run whose marker got lost. Packages without a
-    // registry target (`publish_to: none`, projects without a manifest)
-    // skip the whole step — there is no registry version to compare or
-    // lock file to update.
-    //
-    // A merge-only run never uploads anything, so the step (and the wait for
-    // registry visibility that follows it) is skipped entirely. No step is
-    // marked as done either — the markers would let a later `gg do publish
-    // --continue` believe the release already happened.
-    if (!isMergeOnly && !progress.isStepDone('publish_registry')) {
-      if (await _shouldPublishToRegistry(directory, ggLog)) {
-        final alreadyPublished = await _versionAlreadyPublished(
-          directory: directory,
-          ggLog: ggLog,
-        );
-
-        if (!alreadyPublished) {
-          final hashBeforePubDev = await _state.currentHash(
-            directory: directory,
-            ggLog: ggLog,
-          );
-
-          await _publishToPubDevIfNeeded(
-            directory: directory,
-            ggLog: ggLog,
-            askBeforePublishing: askBeforePublishing,
-          );
-
-          await _commitLockFileIfChanged(
-            directory: directory,
-            ggLog: ggLog,
-            hashBefore: hashBeforePubDev,
-            verbose: isVerbose,
-          );
-        }
-      } else {
-        // Skipping the registry must never be silent — a publish that ends
-        // without an upload looks successful otherwise.
-        final target = await _publishTo.fromDirectory(directory);
-        ggLog(
-          cDetail(
-            'Not publishing to a registry: the manifest says '
-            '"$target". Only the version bump, merge and tag run.',
-          ),
-        );
-      }
-      await markStepDone('publish_registry');
-    }
-
-    // Step 8b: Registries take a while to make a fresh upload visible. Wait
-    // until the version appears on pub.dev/npm — announced with a status
-    // url, reporting progress and bounded by a timeout instead of hanging.
-    // Idempotent (returns immediately once the version is visible), so it
-    // also runs on resumed runs; packages that publish to no registry are
-    // skipped inside. Nothing was uploaded in a merge-only run, so there is
-    // nothing to wait for.
-    if (!isMergeOnly) {
-      await _waitUntilPublished.get(directory: directory, ggLog: ggLog);
-    }
-
-    // Step 9: Merge into the default branch. (When the step is already done
-    // on a resumed run, the default branch was checked out before Step 6.)
+    // Step 8: Record the release states and merge into the default branch.
+    // The merge comes FIRST, the registry upload second: a merge that is
+    // refused — a rejected pull request, a protected branch, a conflict —
+    // must stop the release while nothing has reached a registry yet,
+    // because pub.dev and npm cannot take an upload back. A merged but not
+    // yet uploaded state is resumable; an uploaded but not mergeable one
+    // was not.
     if (!progress.isStepDone('merge')) {
+      // »doCommit« and »doPush« are written immediately
+      // BEFORE the merge, so the merge itself carries them into the default
+      // branch — in the pull-request flow the provider merges main, and gg
+      // cannot push a fix afterwards; in the local flow main is pushed as a
+      // bare ref below, without a checkout on which a state could be
+      // written. [GgState] hashes the tree and ignores `.gg/`, and a squash
+      // merge keeps the tree, so the hashes recorded here are exactly the
+      // hashes of the default branch after the merge. »doCommit« makes a
+      // later »gg did commit« accept the release commit; »doPush« keeps
+      // »gg did push« green on a fresh CI checkout of main. »gg did
+      // publish« needs no marker — it reads the tags. The registry upload
+      // that still has to happen is guarded by its own step
+      // markers — a run that dies between merge and upload is resumed with
+      // »--continue«, never restarted.
+      //
+      // `ignoreUnstaged` — the states describe the *committed* release
+      // content. [GgState] otherwise hashes untracked files as well, and a
+      // publish runs build, test and packaging scripts: an artifact one of
+      // them leaves behind for a moment would be hashed into the state
+      // without ever being committed, and »gg did commit« / »gg did
+      // publish« would fail the instant it is gone again. Real uncommitted
+      // work still fails those checks, which read the full working tree.
+      await _state.writeSuccess(
+        directory: directory,
+        key: stateKeyDoCommit,
+        ignoreUnstaged: true,
+      );
+      await _state.writeSuccess(
+        directory: directory,
+        key: _doPush.stateKey,
+        ignoreUnstaged: true,
+      );
+
       await _merge(
         directory: directory,
         message: resolvedMessage,
@@ -574,30 +664,149 @@ class DoPublish extends DirCommand<void> {
       await markStepDone('merge');
     }
 
-    // The merge/version commits produced a fully-committed, gg-verified HEAD on
-    // the main branch. Record it as »doCommit« too, so a later »gg did commit«
-    // accepts the merge commit instead of rejecting it.
-    await _state.writeSuccess(directory: directory, key: stateKeyDoCommit);
-
-    // Record the merged state as published, so »gg did publish« answers yes
-    // for exactly this content. A merge-only run records nothing — it
-    // releases nothing, so marking it published would be a lie.
-    if (!isMergeOnly) {
-      await _state.writeSuccess(directory: directory, key: stateKeyDidPublish);
-    }
-
     // In the pull-request flow the provider already updated main when it
-    // merged the PR, so skip the direct main push there.
+    // merged the PR. Otherwise the merge exists only locally so far — push
+    // it NOW, before anything reaches a registry, so the release is durable
+    // on the remote first. The push moves the bare ref (»git push origin
+    // <main>«): the default branch is never checked out, so no editor
+    // tooling can descend on an old worktree state and rewrite lock files
+    // mid-release. The »doPush« state was recorded before the merge and
+    // rode into the default branch with it.
     if (!viaPullRequest) {
-      // Push through DoPush.get, not raw gitPush: it writes the »doPush«
-      // success state into .gg/gg.json (amended into the release commit)
-      // before pushing, so »gg did push« passes on a fresh CI checkout of
-      // main. The doPush state carried over from the feature branch belongs
-      // to an older hash and would make CI red on every released package.
-      await _doPush.get(directory: directory, force: false, ggLog: noLog);
+      await _pushDefaultBranchRef(directory);
     }
 
-    // Step 10: Delete the feature branch. The decision was resolved up
+    // The registry upload and its bookkeeping run on the FEATURE branch: the
+    // lock-file commits the upload leaves behind must never sit on the local
+    // default branch, which gg cannot push in the pull-request flow. The
+    // merge made feature and default branch identical, so the upload
+    // publishes exactly the merged content.
+    await _checkoutFeatureBranch(directory, featureBranch);
+
+    // Step 9: Publish to the registry (pub.dev/npm). The registry lookup is
+    // a safety net: a version that is already visible must not be published
+    // again on a resumed run whose marker got lost. Packages without a
+    // registry target (`publish_to: none`, projects without a manifest)
+    // skip the whole step — there is no registry version to compare or
+    // lock file to update.
+    //
+    // A merge-only run never uploads anything, so the step (and the wait for
+    // registry visibility that follows it) is skipped entirely. No step is
+    // marked as done either — the markers would let a later `gg do publish
+    // --continue` believe the release already happened.
+    if (!isMergeOnly) {
+      final targets = await _publishTo.targets(directory);
+
+      if (targets.isEmpty) {
+        // Skipping the registry must never be silent — a publish that ends
+        // without an upload looks successful otherwise.
+        ggLog(
+          cDetail(
+            'Not publishing to a registry: the manifests say '
+            '"${targets.label}". Only the version bump, merge and tag run.',
+          ),
+        );
+      } else {
+        // A leftover marker of an older gg cannot say which registry it
+        // reached, so it is re-checked rather than trusted — the lookup below
+        // happens anyway.
+        if (progress.hasLegacyRegistryStep) {
+          ggLog(
+            cDetail(
+              'Found a publish marker of an older gg version — '
+              're-checking each registry.',
+            ),
+          );
+        }
+
+        // Every registry gets its own marker: a run whose pub.dev upload
+        // succeeded before npm failed must resume at npm alone.
+        final open = <PublishTarget>{};
+        for (final target in targets.ordered) {
+          if (progress.isStepDone(publishRegistryStep(target))) {
+            continue;
+          }
+          if (await _versionAlreadyPublishedOn(
+            target: target,
+            directory: directory,
+            ggLog: ggLog,
+          )) {
+            // Nothing to upload, but the registry is settled — record it so a
+            // resume does not probe it again.
+            await markStepDone(publishRegistryStep(target));
+            continue;
+          }
+          open.add(target);
+        }
+
+        if (open.isNotEmpty) {
+          final hashBeforePubDev = await _state.currentHash(
+            directory: directory,
+            ggLog: ggLog,
+          );
+
+          await _publishToPubDevIfNeeded(
+            directory: directory,
+            ggLog: ggLog,
+            askBeforePublishing: askBeforePublishing,
+            targets: open,
+            // Awaited between the uploads, so a registry that already accepted
+            // the version is on disk before the next one can fail.
+            onPublished: (target) => markStepDone(publishRegistryStep(target)),
+          );
+
+          await _commitLockFileIfChanged(
+            directory: directory,
+            ggLog: ggLog,
+            hashBefore: hashBeforePubDev,
+            verbose: isVerbose,
+          );
+        }
+      }
+    }
+
+    // Step 9b: Registries take a while to make a fresh upload visible. Wait
+    // until the version appears on pub.dev/npm — announced with a status
+    // url, reporting progress and bounded by a timeout instead of hanging.
+    // Idempotent (returns immediately once the version is visible), so it
+    // also runs on resumed runs; packages that publish to no registry are
+    // skipped inside. Nothing was uploaded in a merge-only run, so there is
+    // nothing to wait for.
+    if (!isMergeOnly) {
+      await _waitUntilPublished.get(directory: directory, ggLog: ggLog);
+    }
+
+    // Step 10: Tag the release and push the tags. The tag has to sit on the
+    // release commit of the default branch — the merge step brought local
+    // main up to date, so switch over, tag, push the tags and return to the
+    // feature branch below. A merge-only run marks no release, so it
+    // creates no tag — and has none to push.
+    if (!isMergeOnly) {
+      await _checkoutDefaultBranch(directory);
+      if (!progress.isStepDone('tag')) {
+        await _publishGit(directory: directory, ggLog: ggLog);
+        await markStepDone('tag');
+      }
+      await _doPush.gitPush(directory: directory, force: false, pushTags: true);
+    }
+
+    // Step 11: Back to the feature branch — work on the ticket continues
+    // there, not on the default branch the release ended up on.
+    await _checkoutFeatureBranch(directory, featureBranch);
+
+    // Reactivate the overrides the publish had to remove, so the repository
+    // resolves its dependencies against the sibling checkouts of its ticket
+    // workspace again.
+    if (restorePubspecOverrides(directory)) {
+      ggLog(
+        cDetail(
+          'Restored ${NoPubspecOverrides.fileName} from '
+          '$pubspecOverridesBackupPath.',
+        ),
+      );
+    }
+
+    // Step 12: Delete the feature branch. The decision was resolved up
     // front (Step 4). Idempotent instead of tracked: a resumed multi-flow
     // run re-pushes the branch before delegating here, so the deletion
     // must re-run — and deleting an already-gone remote ref (e.g. removed
@@ -611,23 +820,15 @@ class DoPublish extends DirCommand<void> {
       );
     }
 
-    // Step 11: Tag the release and push the tags. A merge-only run marks no
-    // release, so it creates no tag — and has none to push.
-    if (!isMergeOnly) {
-      if (!progress.isStepDone('tag')) {
-        await _publishGit(directory: directory, ggLog: ggLog);
-        await markStepDone('tag');
-      }
-      await _doPush.gitPush(directory: directory, force: false, pushTags: true);
-    }
-
-    // Step 12: Fully published — the runtime file has served its purpose.
+    // Step 13: Fully published — the runtime file has served its purpose.
     if (runtimeFile.existsSync()) {
       runtimeFile.deleteSync();
     }
   }
 
   final Publish _publishToPubDev;
+  final SyncHybridVersions _syncHybridVersions;
+  final DoUpgradeDeps _upgradeDeps;
   final CanPublish _canPublish;
   final GgState _state;
   final AddVersionTag _addVersionTag;
@@ -635,7 +836,7 @@ class DoPublish extends DirCommand<void> {
   final AddGitOnlyVersionTag _addGitOnlyVersionTag;
   final RemoveVersionTag _removeVersionTag;
   final DoPush _doPush;
-  final Commit _commit;
+  final GgSystemCommit _systemCommit;
   final DidCommit _didCommit;
   final PrepareNextVersion _prepareNextVersion;
   final FromPubspec _fromPubspec;
@@ -719,26 +920,37 @@ class DoPublish extends DirCommand<void> {
 
   /// Returns true when the current version is already visible on the
   /// registry, i.e. publishing it again is obsolete.
-  Future<bool> _versionAlreadyPublished({
+  Future<bool> _versionAlreadyPublishedOn({
+    required PublishTarget target,
     required Directory directory,
     required GgLog ggLog,
   }) async {
-    final currentVersion = await _fromPubspec.get(
-      directory: directory,
-      ggLog: <String>[].add,
-    );
+    // Read the version from the manifest that describes THIS registry. The
+    // two are equal after the reconciliation, but reading the right one keeps
+    // the check honest if a manual edit broke that.
+    final catalog = await LanguageCatalog.load();
+    final currentVersion = await target
+        .manifestIn(directory, catalog)
+        .readVersion();
+
     try {
       // Prereleases never become the registry's "latest" version, so they
       // must be looked up in the full version list instead.
       if (currentVersion.preRelease.isNotEmpty) {
-        final allVersions = await _publishedVersion!.allVersions(
-          directory: directory,
-          ggLog: <String>[].add,
-        );
+        // The null case is defensive: registryVersionsFor answers null only
+        // for a registry the package does not publish to, and this is called
+        // for its own targets.
+        final allVersions =
+            await _publishedVersion!.registryVersionsFor(
+              target: target,
+              directory: directory,
+            ) ??
+            const <Version>[]; // coverage:ignore-line
         return allVersions.contains(currentVersion);
       }
 
-      final publishedVersion = await _publishedVersion!.get(
+      final publishedVersion = await _publishedVersion!.latestVersionFor(
+        target: target,
         directory: directory,
         ggLog: <String>[].add,
       );
@@ -747,11 +959,37 @@ class DoPublish extends DirCommand<void> {
       // coverage:ignore-start
     } catch (e) {
       ggLog(cError('$e'));
-      ggLog(cDetail('Package probably not published on pub.dev'));
+      ggLog(cDetail('Package probably not published on ${target.id}'));
 
       return false;
     }
     // coverage:ignore-end
+  }
+
+  /// Commits the manifests the hybrid reconciliation rewrote.
+  ///
+  /// The hash is transplanted the way `_addNextVersion` does it, so the check
+  /// results recorded before the sync stay valid — otherwise `can publish`
+  /// would re-run every check on a purely mechanical edit.
+  Future<void> _commitVersionSync({
+    required Directory directory,
+    required GgLog ggLog,
+    required Version version,
+  }) async {
+    final hashBefore = await _state.currentHash(
+      directory: directory,
+      ggLog: ggLog,
+    );
+
+    await _state.updateHash(hash: hashBefore, directory: directory);
+
+    // A resumed run finds the sync already committed; the system commit
+    // reports »nothing to do« instead of throwing.
+    await _systemCommit.commit(
+      ggLog: ggLog,
+      directory: directory,
+      message: '${ggCommitPrefix}Sync manifest versions to $version',
+    );
   }
 
   /// Prepare the next version and release the changelog.
@@ -763,7 +1001,7 @@ class DoPublish extends DirCommand<void> {
     await _addNextVersion(directory, ggLog);
 
     // CHANGELOG.md release is Dart/Flutter only; TS uses manifest versioning.
-    if (_supportsChangeLog(directory)) {
+    if (await _supportsChangeLog(directory)) {
       await _prepareChangelog(
         directory: directory,
         ggLog: noLog,
@@ -772,13 +1010,18 @@ class DoPublish extends DirCommand<void> {
     }
   }
 
-  /// Publishes to the package registry. Only called from the
-  /// `publish_registry` step after `_shouldPublishToRegistry` returned true —
-  /// registry-less targets are announced and skipped there.
+  /// Uploads to the registries in [targets]. Only called from the registry
+  /// step for the targets that are still open — registry-less packages are
+  /// announced and skipped there.
+  ///
+  /// [onPublished] is awaited after each registry accepted the upload, which
+  /// is what makes a partial failure resumable.
   Future<void> _publishToPubDevIfNeeded({
     required Directory directory,
     required GgLog ggLog,
     required bool? askBeforePublishing,
+    required Set<PublishTarget> targets,
+    required Future<void> Function(PublishTarget target) onPublished,
   }) async {
     final shouldAskBeforePublishing = await _shouldAskBeforePublishing(
       directory,
@@ -790,6 +1033,8 @@ class DoPublish extends DirCommand<void> {
       directory: directory,
       ggLog: ggLog,
       askBeforePublishing: shouldAskBeforePublishing,
+      targets: targets,
+      onPublished: onPublished,
     );
   }
 
@@ -859,14 +1104,9 @@ class DoPublish extends DirCommand<void> {
     return true;
   }
 
-  /// Checks out the default branch (`main`/`master`). Used when a resumed run
-  /// skips the already-done merge step: the release commit to push and tag
-  /// lives on the default branch, not on the feature branch HEAD may be on.
-  Future<void> _checkoutDefaultBranch(Directory directory) async {
-    final current = await _localBranch.get(
-      directory: directory,
-      ggLog: <String>[].add,
-    );
+  /// The name of the local default branch (`main`/`master`), or null when
+  /// the repository has neither.
+  Future<String?> _defaultBranchName(Directory directory) async {
     for (final candidate in ['main', 'master']) {
       final exists = await _processWrapper.run('git', [
         'rev-parse',
@@ -874,23 +1114,91 @@ class DoPublish extends DirCommand<void> {
         '--quiet',
         'refs/heads/$candidate',
       ], workingDirectory: directory.path);
-      if (exists.exitCode != 0) {
-        continue;
+      if (exists.exitCode == 0) {
+        return candidate;
       }
-      if (current != candidate) {
-        final checkout = await _processWrapper.run('git', [
-          'checkout',
-          candidate,
-        ], workingDirectory: directory.path);
-        if (checkout.exitCode != 0) {
-          throw Exception(
-            cError('git checkout $candidate failed: ${checkout.stderr}'),
-          );
-        }
-        ggLog(cDetail('Checked out $candidate to finish the resumed publish.'));
-      }
+    }
+    return null;
+  }
+
+  /// Pushes the local default branch to origin as a bare ref — WITHOUT
+  /// checking it out, so no editor tooling ever sees an old main state in
+  /// the worktree. Used by the local merge flow, whose squash commit exists
+  /// only locally until this push. Idempotent: an already-pushed ref is a
+  /// no-op ("Everything up-to-date").
+  Future<void> _pushDefaultBranchRef(Directory directory) async {
+    final branch = await _defaultBranchName(directory);
+    if (branch == null) {
       return;
     }
+
+    final result = await _processWrapper.run('git', [
+      'push',
+      'origin',
+      branch,
+    ], workingDirectory: directory.path);
+    if (result.exitCode != 0) {
+      throw Exception(
+        cError('git push origin $branch failed: ${result.stderr}'),
+      );
+    }
+    ggLog(cDetail('✓ Pushed $branch.'));
+  }
+
+  /// Checks out the default branch (`main`/`master`): the release commit to
+  /// tag lives there, not on the feature branch HEAD may be on. The only
+  /// place of the whole publish that checks the default branch out — and it
+  /// runs after the merge, so the worktree switches to content that is
+  /// identical to the feature branch, never to an old main state.
+  Future<void> _checkoutDefaultBranch(Directory directory) async {
+    final candidate = await _defaultBranchName(directory);
+    if (candidate == null) {
+      return;
+    }
+    final current = await _localBranch.get(
+      directory: directory,
+      ggLog: <String>[].add,
+    );
+    if (current == candidate) {
+      return;
+    }
+    final checkout = await _processWrapper.run('git', [
+      'checkout',
+      candidate,
+    ], workingDirectory: directory.path);
+    if (checkout.exitCode != 0) {
+      throw Exception(
+        cError('git checkout $candidate failed: ${checkout.stderr}'),
+      );
+    }
+    ggLog(cDetail('Checked out $candidate.'));
+  }
+
+  /// Checks out the feature branch [branchName] again. The merge and the tag
+  /// step leave HEAD on the default branch, but the registry upload and the
+  /// state the user continues working on belong to the feature branch. A
+  /// no-op when HEAD is already there.
+  Future<void> _checkoutFeatureBranch(
+    Directory directory,
+    String branchName,
+  ) async {
+    final current = await _localBranch.get(
+      directory: directory,
+      ggLog: <String>[].add,
+    );
+    if (current == branchName) {
+      return;
+    }
+    final checkout = await _processWrapper.run('git', [
+      'checkout',
+      branchName,
+    ], workingDirectory: directory.path);
+    if (checkout.exitCode != 0) {
+      throw Exception(
+        cError('git checkout $branchName failed: ${checkout.stderr}'),
+      );
+    }
+    ggLog(cDetail('Checked out $branchName.'));
   }
 
   /// Adds the version tag for [directory] so `do_push --tags` carries it.
@@ -918,7 +1226,22 @@ class DoPublish extends DirCommand<void> {
       }
     }
 
-    if (_supportsChangeLog(directory)) {
+    // One tag covers both registries of a hybrid: the manifests are
+    // reconciled before the bump and bumped in lock-step. A manual edit that
+    // broke that would otherwise tag the release with one side's version and
+    // silently mislabel the other.
+    if (await hybridVersionsDiffer(directory)) {
+      throw Exception(
+        cError(
+          'pubspec.yaml and package.json carry different versions — '
+          'refusing to tag the release.',
+        ),
+      );
+    }
+
+    if (await _supportsChangeLog(directory)) {
+      // AddVersionTag enforces pubspec == CHANGELOG, which is exactly what a
+      // package with a pub.dev page needs.
       await _addVersionTag.exec(
         directory: directory,
         ggLog: (msg) => ggLog('✓ $msg'),
@@ -927,7 +1250,7 @@ class DoPublish extends DirCommand<void> {
     }
     final type = checkProjectType(directory);
     if (type == ProjectType.typescript) {
-      // Bridges tag from package.json too (published as TypeScript).
+      // npm-only, including an npm-only hybrid: tag from package.json.
       // ggLog with `✓` prefix is bound at construction time.
       await _addTypeScriptVersionTag.exec(directory: directory);
       return;
@@ -962,26 +1285,19 @@ class DoPublish extends DirCommand<void> {
 
     await _state.updateHash(hash: hashBefore, directory: directory);
 
-    try {
-      await _commit.commit(
-        ggLog: ggLog,
-        directory: directory,
-        doStage: true,
-        message: '#gg: Prepare changelog for release',
-        ammendWhenNotPushed: true,
-      );
-    } on Exception catch (e) {
-      // The changelog release is a no-op once the version already has a
-      // section in CHANGELOG.md — a run that bumped the version and released
-      // the changelog but died before the registry upload reaches exactly
-      // that state. Tolerate the empty commit like [_addNextVersion] does,
-      // otherwise the repair run cannot get past the step that is already
-      // done and the package is never published.
-      if (e.toString().contains('Nothing to commit')) {
-        reportLog('The changelog is already released — nothing to commit.');
-      } else {
-        rethrow;
-      }
+    // The changelog release is a no-op once the version already has a
+    // section in CHANGELOG.md — a run that bumped the version and released
+    // the changelog but died before the registry upload reaches exactly that
+    // state. The system commit reports »nothing to do« instead of throwing,
+    // so the repair run gets past the step that is already done.
+    final result = await _systemCommit.commit(
+      ggLog: ggLog,
+      directory: directory,
+      message: '${ggCommitPrefix}Prepare changelog for release',
+      ammendWhenNotPushed: true,
+    );
+    if (!result.systemCommitCreated) {
+      reportLog('The changelog is already released — nothing to commit.');
     }
   }
 
@@ -1020,7 +1336,7 @@ class DoPublish extends DirCommand<void> {
     // before it is released (gg sets »CHANGELOG.md merge=union«). Publishing
     // over such a section would silently swallow the »## Unreleased« entries.
     // Refuse right after the registry was asked, before anything is written.
-    if (_supportsChangeLog(directory)) {
+    if (await _supportsChangeLog(directory)) {
       await _throwIfNextVersionIsAlreadyInChangelog(
         directory: directory,
         ggLog: ggLog,
@@ -1042,23 +1358,16 @@ class DoPublish extends DirCommand<void> {
 
     final newVersion = await _fromPubspec.fromDirectory(directory: directory);
 
-    try {
-      await _commit.commit(
-        ggLog: ggLog,
-        directory: directory,
-        doStage: true,
-        message: '#gg: Finish development of version $newVersion',
-        ammendWhenNotPushed: false,
-      );
-    } on Exception catch (e) {
-      // When resuming after a failed publish, the version is already bumped
-      // and committed, so there is nothing left to commit. Tolerate the empty
-      // commit instead of crashing — this keeps »do publish« idempotent.
-      if (e.toString().contains('Nothing to commit')) {
-        ggLog('Version $newVersion is already prepared — nothing to commit.');
-      } else {
-        rethrow;
-      }
+    // When resuming after a failed publish, the version is already bumped
+    // and committed, so there is nothing left to commit — the system commit
+    // reports that instead of throwing, which keeps »do publish« idempotent.
+    final result = await _systemCommit.commit(
+      ggLog: ggLog,
+      directory: directory,
+      message: '${ggCommitPrefix}Finish development of version $newVersion',
+    );
+    if (!result.systemCommitCreated) {
+      ggLog('Version $newVersion is already prepared — nothing to commit.');
     }
   }
 
@@ -1166,9 +1475,8 @@ class DoPublish extends DirCommand<void> {
   ) async {
     askBeforePublishing ??= _askBeforePublishingFromParam;
 
-    final target = await _publishTo.fromDirectory(directory);
-    final publishToNone = target == 'none';
-    if (publishToNone) {
+    final targets = await _publishTo.targets(directory);
+    if (targets.isEmpty) {
       return false;
     }
 
@@ -1202,45 +1510,67 @@ class DoPublish extends DirCommand<void> {
     required int hashBefore,
     required bool verbose,
   }) async {
-    final lockFile = lockFileFor(directory);
-    final result = await _runProcess(
-      'git',
-      ['status', '--porcelain', lockFile],
-      directory: directory,
-      ggLog: ggLog,
-      verbose: verbose,
-    );
+    // A hybrid carries a lock file per ecosystem, and the publish can touch
+    // either of them.
+    final lockFiles = <String>[
+      if (File('${directory.path}/pubspec.yaml').existsSync()) 'pubspec.lock',
+      if (File('${directory.path}/package.json').existsSync())
+        detectTypeScriptPackageManager(directory).lockFile,
+    ];
 
-    if (result.stdout.toString().trim().isEmpty) {
+    final changed = <String>[];
+    for (final lockFile in lockFiles) {
+      final result = await _runProcess(
+        'git',
+        ['status', '--porcelain', lockFile],
+        directory: directory,
+        ggLog: ggLog,
+        verbose: verbose,
+      );
+      if (result.stdout.toString().trim().isNotEmpty) {
+        changed.add(lockFile);
+      }
+    }
+
+    if (changed.isEmpty) {
       return;
     }
 
     await _state.updateHash(hash: hashBefore, directory: directory);
 
-    await _commit.commit(
+    // The lock files were determined above — hand them over as the pathspec
+    // so the commit really contains what its message names.
+    await _systemCommit.commit(
       ggLog: ggLog,
       directory: directory,
-      doStage: true,
-      message: '#gg: Update $lockFile',
+      message: '${ggCommitPrefix}Update ${changed.join(', ')}',
+      paths: changed,
       ammendWhenNotPushed: true,
     );
   }
 
-  /// Returns whether the package should be published to its registry
-  /// (pub.dev for Dart/Flutter, npm for TypeScript). Uses the language-aware
-  /// publish target instead of assuming a pubspec.yaml.
-  Future<bool> _shouldPublishToRegistry(
-    Directory directory,
-    GgLog ggLog,
-  ) async {
-    final target = await _publishTo.fromDirectory(directory);
-    return target == 'pub.dev' || target == 'npm';
-  }
-
   /// Whether [directory] uses the Dart/Flutter CHANGELOG.md based versioning
-  /// flow. TypeScript and other project types use a registry/manifest flow.
-  bool _supportsChangeLog(Directory directory) =>
-      checkProjectType(directory).isDartFamily;
+  /// flow. npm-only and manifest-less projects use a registry/manifest flow.
+  ///
+  /// A package without a `pubspec.yaml` never has it, and a plain Dart or
+  /// Flutter package always does — a `publish_to: none` one included, whose
+  /// CHANGELOG is still the human-facing release history.
+  ///
+  /// Only a *hybrid* is decided by its publish target: it used to resolve to
+  /// TypeScript wholesale, so its CHANGELOG.md was never released. One that
+  /// publishes to pub.dev now gets the Dart flow, because pub.dev shows the
+  /// CHANGELOG on the package page and pana scores it. An npm-only hybrid
+  /// keeps the TypeScript flow — it has no pub.dev page to fill.
+  Future<bool> _supportsChangeLog(Directory directory) async {
+    if (!detectProjectType(directory).isDartFamily) {
+      return false;
+    }
+    if (!isHybridProject(directory)) {
+      return true;
+    }
+    final targets = await _publishTo.targets(directory);
+    return targets.contains(PublishTarget.pubDev);
+  }
 
   /// Deletes the provided feature branch on the remote. Idempotent: the
   /// remote ref is looked up first, so a branch that is already gone (a
@@ -1308,10 +1638,10 @@ class DoPublish extends DirCommand<void> {
   /// the package is published against the versions on pub.dev instead of the
   /// developer's working copies. Does nothing when there is none.
   ///
-  /// The file is saved to [pubspecOverridesBackupPath] first: the multi-repo
-  /// flow restores it once the merge into the main branch is through, so the
-  /// repository keeps resolving against its sibling checkouts after the
-  /// publish.
+  /// The file is saved to [pubspecOverridesBackupPath] first: the end of the
+  /// publish restores it once the release is through and the feature branch
+  /// is checked out again, so the repository keeps resolving against its
+  /// sibling checkouts after the publish.
   void _deletePubspecOverrides({
     required Directory directory,
     required GgLog ggLog,
@@ -1393,6 +1723,10 @@ class DoPublish extends DirCommand<void> {
 
   bool get _forceFromArgs => argResults?['force'] as bool? ?? false;
 
+  bool get _panaFromArgs => argResults?[panaOption] as bool? ?? true;
+
+  bool get _upgradeFromArgs => argResults?['upgrade'] as bool? ?? true;
+
   bool get _prWasProvided => argResults?.wasParsed('pr') ?? false;
 
   String? get _messageFromArgs => argResults?['message'] as String?;
@@ -1419,6 +1753,20 @@ class DoPublish extends DirCommand<void> {
     argParser.addFlag(
       'delete-feature-branch',
       help: 'Delete the feature branch on origin',
+      defaultsTo: true,
+      negatable: true,
+    );
+
+    argParser.addFlag(
+      panaOption,
+      help: 'Run »dart run pana« as part of »can publish«.',
+      defaultsTo: true,
+      negatable: true,
+    );
+
+    argParser.addFlag(
+      'upgrade',
+      help: 'Upgrade and tighten the dependencies before publishing.',
       defaultsTo: true,
       negatable: true,
     );

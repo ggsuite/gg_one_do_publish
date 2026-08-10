@@ -6,6 +6,7 @@
 
 import 'dart:io';
 
+import 'package:args/command_runner.dart';
 import 'package:gg_changelog/gg_changelog.dart';
 import 'package:gg_git/gg_git_test_helpers.dart';
 import 'package:gg_log/gg_log.dart';
@@ -20,6 +21,8 @@ import 'package:gg_one_commit/gg_one_commit.dart';
 
 // .............................................................................
 void main() {
+  setUpAll(() => registerFallbackValue(Directory('.')));
+
   late Directory d;
   final messages = <String>[];
   // Strip the colors so the expectations stay readable. One closure
@@ -39,35 +42,61 @@ void main() {
 
   // ...........................................................................
   void mockCommands() {
-    when(() => pubGetOffline.exec(directory: d, ggLog: ggLog)).thenAnswer((
-      _,
-    ) async {
+    when(
+      () => pubGetOffline.exec(
+        directory: any(named: 'directory'),
+        ggLog: ggLog,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async {
       messages.add('pubGetOffline');
     });
-    when(() => pana.exec(directory: d, ggLog: ggLog)).thenAnswer((_) async {
+    when(
+      () => pana.exec(
+        directory: any(named: 'directory'),
+        ggLog: ggLog,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async {
       messages.add('pana');
     });
-    when(() => npmLoggedIn.exec(directory: d, ggLog: ggLog)).thenAnswer((
-      _,
-    ) async {
+    when(
+      () => npmLoggedIn.exec(
+        directory: any(named: 'directory'),
+        ggLog: ggLog,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async {
       messages.add('npmLoggedIn');
     });
-    when(() => didCommit.exec(directory: d, ggLog: ggLog)).thenAnswer((
-      _,
-    ) async {
+    when(
+      () => didCommit.exec(
+        directory: any(named: 'directory'),
+        ggLog: ggLog,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async {
       messages.add('didCommit');
       return true;
     });
-    when(() => isVersionPrepared.exec(directory: d, ggLog: ggLog)).thenAnswer((
-      _,
-    ) async {
+    when(
+      () => isVersionPrepared.exec(
+        directory: any(named: 'directory'),
+        ggLog: ggLog,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async {
       messages.add('isVersionPrepared');
       return true;
     });
 
-    when(() => hasRightFormat.exec(directory: d, ggLog: ggLog)).thenAnswer((
-      _,
-    ) async {
+    when(
+      () => hasRightFormat.exec(
+        directory: any(named: 'directory'),
+        ggLog: ggLog,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async {
       messages.add('hasRightFormat');
       return true;
     });
@@ -75,6 +104,7 @@ void main() {
 
   // ...........................................................................
   setUp(() async {
+    messages.clear();
     pana = MockPana();
     npmLoggedIn = MockNpmLoggedIn();
     didCommit = MockDidCommit();
@@ -123,6 +153,51 @@ void main() {
         expect(messages[count++], 'didCommit');
         expect(messages[count++], 'pana');
         expect(messages[count++], 'npmLoggedIn');
+      });
+    });
+
+    group('pana option', () {
+      test('runs pana when --no-pana is not given', () async {
+        mockCommands();
+        await canPublish.exec(
+          directory: d,
+          ggLog: ggLog,
+          options: const <String, dynamic>{},
+        );
+        expect(messages, contains('pana'));
+      });
+
+      test('skips pana when the pana option is false', () async {
+        mockCommands();
+        await canPublish.exec(
+          directory: d,
+          ggLog: ggLog,
+          options: const <String, dynamic>{panaOption: false},
+        );
+        expect(messages, isNot(contains('pana')));
+        expect(messages, contains(contains('Skipping pana (--no-pana)')));
+        // The remaining checks still run.
+        expect(messages, contains('npmLoggedIn'));
+      });
+
+      test('skips pana when --no-pana is given on the command line', () async {
+        mockCommands();
+        final runner = CommandRunner<void>('gg', 'gg')..addCommand(canPublish);
+        await runner.run(['publish', '--no-pana', '--input', d.path]);
+        expect(messages, isNot(contains('pana')));
+        expect(messages, contains(contains('Skipping pana (--no-pana)')));
+      });
+    });
+
+    group('OptionalPana', () {
+      test('get() delegates to the wrapped pana', () async {
+        when(
+          () => pana.get(directory: d, ggLog: ggLog),
+        ).thenAnswer((_) async => messages.add('pana.get'));
+
+        final optionalPana = OptionalPana(ggLog: ggLog, pana: pana);
+        await optionalPana.get(directory: d, ggLog: ggLog);
+        expect(messages, contains('pana.get'));
       });
     });
 
