@@ -161,75 +161,77 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
-  gg:
-    dependency: "direct overridden"
-    description:
-      path: "../gg"
-      relative: true
-    source: path
-    version: "16.1.0"
   gg_args:
     dependency: "direct main"
     description:
-      path: "../gg_args"
-      relative: true
-    source: path
-    version: "3.0.0"
+      name: gg_args
+      sha256: "9b7e1d7a235b16c3ce198cac36429f563208f8b6785b297da0aca48102c9fbd5"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.1"
   gg_capture_print:
     dependency: "direct dev"
     description:
-      path: "../gg_capture_print"
-      relative: true
-    source: path
+      name: gg_capture_print
+      sha256: "8bb2016a9522e04a90b0d6df4678ce38aad05c6a9fa75d8b483ccbeee94663a5"
+      url: "https://pub.dev"
+    source: hosted
     version: "1.0.10"
   gg_changelog:
     dependency: "direct main"
     description:
-      path: "../gg_changelog"
-      relative: true
-    source: path
-    version: "2.0.0"
+      name: gg_changelog
+      sha256: "1105e582a46cbe7359ff9fe36f74cac9d8067c526ce673f74fd46be63e0993c9"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.1"
   gg_console_colors:
     dependency: "direct main"
     description:
-      path: "../gg_console_colors"
-      relative: true
-    source: path
-    version: "2.3.0"
+      name: gg_console_colors
+      sha256: "72907fbc75815c07d99a810738913c681b8a3179cf6b998130367150e367879e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.3.1"
   gg_direct_json:
     dependency: "direct main"
     description:
-      path: "../gg_direct_json"
-      relative: true
-    source: path
+      name: gg_direct_json
+      sha256: "9e0e15cd536d32a27f11cd082ce2a00399e9be4ed42e8c68011fbec67202fc31"
+      url: "https://pub.dev"
+    source: hosted
     version: "2.0.2"
   gg_git:
     dependency: "direct main"
     description:
-      path: "../gg_git"
-      relative: true
-    source: path
-    version: "4.1.1"
+      name: gg_git
+      sha256: fc46f114ccfb39ca5036a96f21adf75d61651d7ecd20f34f64e8a4c36bff1e07
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.1.2"
   gg_hash:
-    dependency: "direct overridden"
+    dependency: transitive
     description:
-      path: "../gg_hash"
-      relative: true
-    source: path
-    version: "1.1.0"
+      name: gg_hash
+      sha256: "472fa084f59eac6503dd8701e91e30e055b3c86030d516dfdaec19a8aa7cab02"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.1"
   gg_is_flutter:
-    dependency: "direct overridden"
+    dependency: transitive
     description:
-      path: "../gg_is_flutter"
-      relative: true
-    source: path
-    version: "2.0.0"
+      name: gg_is_flutter
+      sha256: e42e7697c5bd725b86b0920fffda905767c839b06ceb6407ffcaf09ba67a428b
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.1"
   gg_is_github:
-    dependency: "direct overridden"
+    dependency: transitive
     description:
-      path: "../gg_is_github"
-      relative: true
-    source: path
+      name: gg_is_github
+      sha256: dd98aac6ec6b7c7f27a1093fdf1406762e7dbc6cc3f8245c8eaade33fed8c70d
+      url: "https://pub.dev"
+    source: hosted
     version: "1.0.7"
   gg_json:
     dependency: transitive
@@ -242,143 +244,99 @@ packages:
   gg_lang:
     dependency: "direct main"
     description:
-      path: "../gg_lang"
-      relative: true
-    source: path
-    version: "0.5.0"
-  gg_local_package_dependencies:
-    dependency: "direct overridden"
-    description:
-      path: "../gg_local_package_dependencies"
-      relative: true
-    source: path
-    version: "3.0.0"
-  gg_localize_refs:
-    dependency: "direct overridden"
-    description:
-      path: "../gg_localize_refs"
-      relative: true
-    source: path
-    version: "4.2.3"
+      name: gg_lang
+      sha256: a5837a810421b1337d0f665876d2f551e05765d8464dd5e4ee9afcc1cd898e8f
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.1"
   gg_log:
     dependency: "direct main"
     description:
-      path: "../gg_log"
-      relative: true
-    source: path
+      name: gg_log
+      sha256: "02f9a361ff9054de66c6eb21a7b173c1b989f68a22bab4af10267f17a12763d2"
+      url: "https://pub.dev"
+    source: hosted
     version: "1.0.7"
   gg_merge:
     dependency: "direct main"
     description:
-      path: "../gg_merge"
-      relative: true
-    source: path
-    version: "3.3.0"
-  gg_multi:
-    dependency: "direct overridden"
-    description:
-      path: "../gg_multi"
-      relative: true
-    source: path
-    version: "9.1.0"
-  gg_multi_commit:
-    dependency: "direct overridden"
-    description:
-      path: "../gg_multi_commit"
-      relative: true
-    source: path
-    version: "3.1.0"
-  gg_multi_core:
-    dependency: "direct overridden"
-    description:
-      path: "../gg_multi_core"
-      relative: true
-    source: path
-    version: "3.1.0"
-  gg_multi_do_publish:
-    dependency: "direct overridden"
-    description:
-      path: "../gg_multi_do_publish"
-      relative: true
-    source: path
-    version: "3.1.0"
-  gg_multi_workspace:
-    dependency: "direct overridden"
-    description:
-      path: "../gg_multi_workspace"
-      relative: true
-    source: path
-    version: "3.1.0"
-  gg_one:
-    dependency: "direct overridden"
-    description:
-      path: "../gg_one"
-      relative: true
-    source: path
-    version: "14.2.0"
+      name: gg_merge
+      sha256: "7fb51898011107da054c6ad7a18d3ec343b4f21932b38c7bd3d67748ba5a5e7b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.3.1"
   gg_one_commit:
     dependency: "direct main"
     description:
-      path: "../gg_one_commit"
-      relative: true
-    source: path
-    version: "2.2.2"
+      name: gg_one_commit
+      sha256: "04055df9e8cc3f8a49438b6ae6be1acb6d70e1e44412fc9e4832fce86a45fd1f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.3"
   gg_one_core:
     dependency: "direct main"
     description:
-      path: "../gg_one_core"
-      relative: true
-    source: path
-    version: "2.4.0"
+      name: gg_one_core
+      sha256: "302d1d90c5dc120118c4577fafb81b423083a8c426218835078edaa4552000d8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.1"
   gg_one_merge:
     dependency: "direct main"
     description:
-      path: "../gg_one_merge"
-      relative: true
-    source: path
-    version: "2.4.0"
+      name: gg_one_merge
+      sha256: "8e8e4d3b5f36077cc219ed9a47fc006dd66073fe792b77209eb1b3ccaf71a99e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.1"
   gg_process:
     dependency: "direct main"
     description:
-      path: "../gg_process"
-      relative: true
-    source: path
+      name: gg_process
+      sha256: "2e955e598dcd07c6564a7c308cc6a38c18e0fe959ba64dc6c0880674f93c15a6"
+      url: "https://pub.dev"
+    source: hosted
     version: "1.1.7"
   gg_project_root:
-    dependency: "direct overridden"
+    dependency: transitive
     description:
-      path: "../gg_project_root"
-      relative: true
-    source: path
-    version: "2.0.0"
+      name: gg_project_root
+      sha256: "54c99c176ce0d0f92a1eb03f4160a41dc911fa2c542dd1679990bfd4969f4023"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.1"
   gg_publish:
     dependency: "direct main"
     description:
-      path: "../gg_publish"
-      relative: true
-    source: path
-    version: "4.3.1"
+      name: gg_publish
+      sha256: "3dd350453afef4684d2b6c6072b1c8ae6475d0e15eaddbc9060fe46fd3328e30"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.3.2"
   gg_status_printer:
     dependency: "direct main"
     description:
-      path: "../gg_status_printer"
-      relative: true
-    source: path
-    version: "1.4.2"
+      name: gg_status_printer
+      sha256: "39fe2e107fcdd6b4c1c222a7c1879486c0c5b4cf1c23be293602fca46dbb7b85"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.4.3"
   gg_test:
-    dependency: "direct overridden"
+    dependency: transitive
     description:
-      path: "../gg_test"
-      relative: true
-    source: path
-    version: "3.1.0"
+      name: gg_test
+      sha256: "3a04f47ab980b7292c34d29179f999222984aa76e972e3992f2859045a465204"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.1"
   gg_version:
     dependency: "direct main"
     description:
-      path: "../gg_version"
-      relative: true
-    source: path
-    version: "5.2.1"
+      name: gg_version
+      sha256: d992007880eb1844c3c90680404ef12b97ab1ba856096b8635c79e09dad2a1ea
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.2.2"
   glob:
     dependency: transitive
     description:
