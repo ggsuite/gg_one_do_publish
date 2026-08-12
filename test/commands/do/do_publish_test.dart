@@ -1887,9 +1887,18 @@ void main() {
         group('when the package is published the first time', () {
           group('has not been published before', () {
             test('and askForConfirmation is false', () async {
-              // Mock that the package was never published before
+              // Mock that the package was never published before: the
+              // registry does not know it at all. A version of 0.0.0 is a
+              // published version like any other.
               publishedVersionValue = Version(0, 0, 0);
               mockPublishedVersion();
+              when(
+                () => publishedVersion.latestVersionFor(
+                  target: any(named: 'target'),
+                  directory: dMock(),
+                  ggLog: any(named: 'ggLog'),
+                ),
+              ).thenAnswer((_) async => null);
 
               // Publish with askBeforePublishing = false
               late String exception;
@@ -1905,7 +1914,11 @@ void main() {
                 exception = rmControls(e.toString());
               }
 
-              // Should throw
+              // Should throw, naming the registry of this package
+              expect(
+                exception,
+                contains('The package was never published to pub.dev before.'),
+              );
               expect(
                 exception,
                 contains(

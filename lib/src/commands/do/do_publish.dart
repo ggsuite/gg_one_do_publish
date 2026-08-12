@@ -1541,9 +1541,12 @@ class DoPublish extends DirCommand<void> {
       return false;
     }
 
+    // Name the registries the package actually publishes to: a hybrid with
+    // »publish_to: none« never goes to pub.dev, and naming it there sends the
+    // developer looking for a pub.dev problem that does not exist.
     throw Exception(
       cError(
-        'The package was never published to pub.dev before. '
+        'The package was never published to ${targets.label} before. '
         'Please call »gg do push« with »--ask-before-publishing« '
         'when publishing the first time.',
       ),
