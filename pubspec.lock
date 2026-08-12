@@ -268,23 +268,26 @@ packages:
   gg_one_commit:
     dependency: "direct main"
     description:
-      path: "../gg_one_commit"
-      relative: true
-    source: path
+      name: gg_one_commit
+      sha256: "04055df9e8cc3f8a49438b6ae6be1acb6d70e1e44412fc9e4832fce86a45fd1f"
+      url: "https://pub.dev"
+    source: hosted
     version: "2.2.3"
   gg_one_core:
     dependency: "direct main"
     description:
-      path: "../gg_one_core"
-      relative: true
-    source: path
+      name: gg_one_core
+      sha256: "302d1d90c5dc120118c4577fafb81b423083a8c426218835078edaa4552000d8"
+      url: "https://pub.dev"
+    source: hosted
     version: "2.4.1"
   gg_one_merge:
     dependency: "direct main"
     description:
-      path: "../gg_one_merge"
-      relative: true
-    source: path
+      name: gg_one_merge
+      sha256: "8e8e4d3b5f36077cc219ed9a47fc006dd66073fe792b77209eb1b3ccaf71a99e"
+      url: "https://pub.dev"
+    source: hosted
     version: "2.4.1"
   gg_process:
     dependency: "direct main"
@@ -305,9 +308,10 @@ packages:
   gg_publish:
     dependency: "direct main"
     description:
-      path: "../gg_publish"
-      relative: true
-    source: path
+      name: gg_publish
+      sha256: "3dd350453afef4684d2b6c6072b1c8ae6475d0e15eaddbc9060fe46fd3328e30"
+      url: "https://pub.dev"
+    source: hosted
     version: "4.3.2"
   gg_status_printer:
     dependency: "direct main"

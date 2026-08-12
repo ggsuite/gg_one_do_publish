@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Fix package adding algorithm
+
 ## 2.5.1 - 2026-08-11
 
 ### Changed
