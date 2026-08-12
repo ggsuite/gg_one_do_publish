@@ -199,10 +199,6 @@ void main() {
         publishedVersion: publishedVersion,
       ),
       canPublish: canPublish,
-      isPublished: IsPublished(
-        ggLog: ggLog,
-        publishedVersion: publishedVersion,
-      ),
       configurePublish: makeConfigurePublish(),
       publishedVersion: publishedVersion,
       processWrapper: processWrapper,
@@ -493,10 +489,6 @@ void main() {
         publishedVersion: publishedVersion,
       ),
       canPublish: canPublish,
-      isPublished: IsPublished(
-        ggLog: ggLog,
-        publishedVersion: publishedVersion,
-      ),
       configurePublish: makeConfigurePublish(),
       publishedVersion: publishedVersion,
       processWrapper: processWrapper,
@@ -608,6 +600,36 @@ void main() {
                   });
 
                   group('has not been published before', () {
+                    test('and publishes without asking', () async {
+                      // A package that is not on its registry yet is
+                      // published like any other. The former refusal pointed
+                      // at »gg do push --ask-before-publishing«, an option
+                      // that command does not have.
+                      publishedVersionValue = Version(0, 0, 0);
+                      mockPublishedVersion();
+                      when(
+                        () => publishedVersion.latestVersionFor(
+                          target: any(named: 'target'),
+                          directory: dMock(),
+                          ggLog: any(named: 'ggLog'),
+                        ),
+                      ).thenAnswer((_) async => null);
+
+                      // Expect not asking for confirmation
+                      mockPublishIsSuccessful(
+                        success: true,
+                        askBeforePublishing: false,
+                      );
+
+                      // Publish
+                      await doPublish.exec(
+                        directory: d,
+                        ggLog: ggLog,
+                        askBeforePublishing: false,
+                        deleteFeatureBranch: false,
+                      );
+                    });
+
                     test('and askForConfirmation is true', () async {
                       // Mock that the package was never published before
                       publishedVersionValue = Version(0, 0, 0);
@@ -1124,10 +1146,6 @@ void main() {
                 publishedVersion: publishedVersion,
               ),
               canPublish: canPublish,
-              isPublished: IsPublished(
-                ggLog: ggLog,
-                publishedVersion: publishedVersion,
-              ),
               configurePublish: makeConfigurePublish(
                 editMessage: (String message) async {
                   initialMessage = message;
@@ -1177,10 +1195,6 @@ void main() {
                 publishedVersion: publishedVersion,
               ),
               canPublish: canPublish,
-              isPublished: IsPublished(
-                ggLog: ggLog,
-                publishedVersion: publishedVersion,
-              ),
               configurePublish: makeConfigurePublish(
                 editMessage: (String message) async {
                   initialMessage = message;
@@ -1228,10 +1242,6 @@ void main() {
                 publishedVersion: publishedVersion,
               ),
               canPublish: canPublish,
-              isPublished: IsPublished(
-                ggLog: ggLog,
-                publishedVersion: publishedVersion,
-              ),
               configurePublish: makeConfigurePublish(
                 editMessage: (_) async {
                   fail('Editor must not be opened when message is provided.');
@@ -1461,10 +1471,6 @@ void main() {
                 publishedVersion: publishedVersion,
               ),
               canPublish: canPublish,
-              isPublished: IsPublished(
-                ggLog: ggLog,
-                publishedVersion: publishedVersion,
-              ),
               // The decision is asked by configure-publish — before the
               // publish pipeline starts, never between its steps.
               configurePublish: makeConfigurePublish(
@@ -1521,10 +1527,6 @@ void main() {
                   publishedVersion: publishedVersion,
                 ),
                 canPublish: canPublish,
-                isPublished: IsPublished(
-                  ggLog: ggLog,
-                  publishedVersion: publishedVersion,
-                ),
                 configurePublish: makeConfigurePublish(
                   editMessage: (_) async =>
                       fail('Config exists — configure must not run.'),
@@ -1574,10 +1576,6 @@ void main() {
                 publishedVersion: publishedVersion,
               ),
               canPublish: canPublish,
-              isPublished: IsPublished(
-                ggLog: ggLog,
-                publishedVersion: publishedVersion,
-              ),
               configurePublish: makeConfigurePublish(
                 editMessage: (_) async =>
                     fail('Config exists — configure must not run.'),
@@ -1619,10 +1617,6 @@ void main() {
                 publishedVersion: publishedVersion,
               ),
               canPublish: canPublish,
-              isPublished: IsPublished(
-                ggLog: ggLog,
-                publishedVersion: publishedVersion,
-              ),
               configurePublish: makeConfigurePublish(),
               publishedVersion: publishedVersion,
               processWrapper: processWrapper,
@@ -1681,10 +1675,6 @@ void main() {
                 publishedVersion: publishedVersion,
               ),
               canPublish: canPublish,
-              isPublished: IsPublished(
-                ggLog: ggLog,
-                publishedVersion: publishedVersion,
-              ),
               configurePublish: makeConfigurePublish(
                 editMessage: (String initial) async {
                   fail(
@@ -1741,10 +1731,6 @@ void main() {
                 publishedVersion: publishedVersion,
               ),
               canPublish: canPublish,
-              isPublished: IsPublished(
-                ggLog: ggLog,
-                publishedVersion: publishedVersion,
-              ),
               configurePublish: makeConfigurePublish(),
               publishedVersion: publishedVersion,
               processWrapper: processWrapper,
@@ -1789,10 +1775,6 @@ void main() {
                   publishedVersion: publishedVersion,
                 ),
                 canPublish: canPublish,
-                isPublished: IsPublished(
-                  ggLog: ggLog,
-                  publishedVersion: publishedVersion,
-                ),
                 configurePublish: makeConfigurePublish(),
                 publishedVersion: publishedVersion,
                 processWrapper: processWrapper,
@@ -1845,10 +1827,6 @@ void main() {
                   publishedVersion: publishedVersion,
                 ),
                 canPublish: canPublish,
-                isPublished: IsPublished(
-                  ggLog: ggLog,
-                  publishedVersion: publishedVersion,
-                ),
                 configurePublish: makeConfigurePublish(
                   editMessage: (_) async {
                     fail(
@@ -1884,53 +1862,6 @@ void main() {
       });
 
       group('and throw', () {
-        group('when the package is published the first time', () {
-          group('has not been published before', () {
-            test('and askForConfirmation is false', () async {
-              // Mock that the package was never published before: the
-              // registry does not know it at all. A version of 0.0.0 is a
-              // published version like any other.
-              publishedVersionValue = Version(0, 0, 0);
-              mockPublishedVersion();
-              when(
-                () => publishedVersion.latestVersionFor(
-                  target: any(named: 'target'),
-                  directory: dMock(),
-                  ggLog: any(named: 'ggLog'),
-                ),
-              ).thenAnswer((_) async => null);
-
-              // Publish with askBeforePublishing = false
-              late String exception;
-
-              try {
-                await doPublish.exec(
-                  directory: d,
-                  ggLog: ggLog,
-                  askBeforePublishing: false,
-                  deleteFeatureBranch: false,
-                );
-              } catch (e) {
-                exception = rmControls(e.toString());
-              }
-
-              // Should throw, naming the registry of this package
-              expect(
-                exception,
-                contains('The package was never published to pub.dev before.'),
-              );
-              expect(
-                exception,
-                contains(
-                  'Please call »gg do push« with »--ask-before-publishing«',
-                ),
-              );
-
-              // Check
-            });
-          });
-        });
-
         test('when deleting the feature branch fails', () async {
           mockPublishIsSuccessful(success: true, askBeforePublishing: false);
 
@@ -2087,10 +2018,6 @@ void main() {
               publishedVersion: publishedVersion,
             ),
             canPublish: canPublish,
-            isPublished: IsPublished(
-              ggLog: ggLog,
-              publishedVersion: publishedVersion,
-            ),
             configurePublish: makeConfigurePublish(),
             publishedVersion: publishedVersion,
             processWrapper: processWrapper,
@@ -2167,10 +2094,6 @@ void main() {
             publishedVersion: publishedVersion,
           ),
           canPublish: canPublish,
-          isPublished: IsPublished(
-            ggLog: ggLog,
-            publishedVersion: publishedVersion,
-          ),
           configurePublish: makeConfigurePublish(),
           publishedVersion: publishedVersion,
           processWrapper: processWrapper,
@@ -2281,10 +2204,6 @@ void main() {
             publishedVersion: publishedVersion,
           ),
           canPublish: canPublish,
-          isPublished: IsPublished(
-            ggLog: ggLog,
-            publishedVersion: publishedVersion,
-          ),
           configurePublish: makeConfigurePublish(),
           publishedVersion: publishedVersion,
           processWrapper: processWrapper,
@@ -2633,10 +2552,6 @@ void main() {
             publishedVersion: publishedVersion,
           ),
           canPublish: canPublish,
-          isPublished: IsPublished(
-            ggLog: ggLog,
-            publishedVersion: publishedVersion,
-          ),
           configurePublish: makeConfigurePublish(),
           publishedVersion: publishedVersion,
           processWrapper: processWrapper,
@@ -2802,10 +2717,6 @@ void main() {
             publishedVersion: publishedVersion,
           ),
           canPublish: canPublish,
-          isPublished: IsPublished(
-            ggLog: ggLog,
-            publishedVersion: publishedVersion,
-          ),
           configurePublish: makeConfigurePublish(),
           publishedVersion: publishedVersion,
           processWrapper: processWrapper,
@@ -2969,10 +2880,6 @@ void main() {
           publishedVersion: publishedVersion,
         ),
         canPublish: canPublish,
-        isPublished: IsPublished(
-          ggLog: ggLog,
-          publishedVersion: publishedVersion,
-        ),
         addVersionTag: addVersionTag ?? mockAddVersionTag(),
         configurePublish: makeConfigurePublish(
           editMessage:
@@ -3198,10 +3105,6 @@ void main() {
             publishedVersion: publishedVersion,
           ),
           canPublish: canPublish,
-          isPublished: IsPublished(
-            ggLog: ggLog,
-            publishedVersion: publishedVersion,
-          ),
           configurePublish: makeConfigurePublish(
             editMessage: (_) async =>
                 fail('Editor must not open when the config file exists.'),
@@ -4056,10 +3959,6 @@ void main() {
             publishedVersion: publishedVersion,
           ),
           canPublish: canPublish,
-          isPublished: IsPublished(
-            ggLog: ggLog,
-            publishedVersion: publishedVersion,
-          ),
           configurePublish: makeConfigurePublish(),
           publishedVersion: publishedVersion,
           processWrapper: processWrapper,
@@ -4366,10 +4265,6 @@ void main() {
               publishedVersion: publishedVersion,
             ),
             canPublish: canPublish,
-            isPublished: IsPublished(
-              ggLog: ggLog,
-              publishedVersion: publishedVersion,
-            ),
             addVersionTag: mockAddVersionTag(),
             configurePublish: makeConfigurePublish(
               editMessage: (_) async =>
@@ -4620,10 +4515,6 @@ void main() {
             ggLog: ggLog,
             publish: publish,
             canPublish: capturingCanPublish,
-            isPublished: IsPublished(
-              ggLog: ggLog,
-              publishedVersion: publishedVersion,
-            ),
             configurePublish: makeConfigurePublish(),
             publishedVersion: publishedVersion,
             processWrapper: processWrapper,
@@ -4738,10 +4629,6 @@ void main() {
             publishedVersion: publishedVersion,
           ),
           canPublish: canPublish,
-          isPublished: IsPublished(
-            ggLog: ggLog,
-            publishedVersion: publishedVersion,
-          ),
           configurePublish: makeConfigurePublish(),
           publishedVersion: publishedVersion,
           processWrapper: processWrapper,

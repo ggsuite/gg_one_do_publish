@@ -92,7 +92,6 @@ class DoPublish extends DirCommand<void> {
     DidCommit? didCommit,
     PrepareNextVersion? prepareNextVersion,
     FromPubspec? fromPubspec,
-    IsPublished? isPublished,
     changelog.Release? release,
     changelog.HasVersion? hasVersion,
     PublishTo? publishTo,
@@ -134,7 +133,6 @@ class DoPublish extends DirCommand<void> {
        _fromPubspec = fromPubspec ?? FromPubspec(ggLog: ggLog),
        _releaseChangelog = release ?? changelog.Release(ggLog: ggLog),
        _hasVersion = hasVersion ?? changelog.HasVersion(ggLog: ggLog),
-       _isPublished = isPublished ?? IsPublished(ggLog: ggLog),
        _publishTo = publishTo ?? PublishTo(ggLog: ggLog),
        _mergeFlow = mergeFlow ?? MergeFlow(ggLog: ggLog),
        _publishedVersion = publishedVersion,
@@ -890,7 +888,6 @@ class DoPublish extends DirCommand<void> {
   final FromPubspec _fromPubspec;
   final changelog.Release _releaseChangelog;
   final changelog.HasVersion _hasVersion;
-  final IsPublished _isPublished;
   final PublishTo _publishTo;
   final MergeFlow _mergeFlow;
   PublishedVersion? _publishedVersion;
@@ -1516,6 +1513,12 @@ class DoPublish extends DirCommand<void> {
   }
 
   /// Returns whether publishing confirmation should be shown.
+  ///
+  /// A package that is not on its registry yet is published like any other:
+  /// asking for a confirmation flag was a dead end — the message named
+  /// »gg do push --ask-before-publishing«, an option that command does not
+  /// have — and the first upload has its own gate in gg_publish's [Publish],
+  /// which walks the user through the manual first release.
   Future<bool> _shouldAskBeforePublishing(
     Directory directory,
     GgLog ggLog,
@@ -1523,34 +1526,14 @@ class DoPublish extends DirCommand<void> {
   ) async {
     askBeforePublishing ??= _askBeforePublishingFromParam;
 
+    // A package without a public registry is never uploaded, so there is
+    // nothing to confirm.
     final targets = await _publishTo.targets(directory);
     if (targets.isEmpty) {
       return false;
     }
 
-    final wasPublishedBefore = await _isPublished.get(
-      directory: directory,
-      ggLog: ggLog,
-    );
-
-    if (askBeforePublishing) {
-      return true;
-    }
-
-    if (wasPublishedBefore) {
-      return false;
-    }
-
-    // Name the registries the package actually publishes to: a hybrid with
-    // »publish_to: none« never goes to pub.dev, and naming it there sends the
-    // developer looking for a pub.dev problem that does not exist.
-    throw Exception(
-      cError(
-        'The package was never published to ${targets.label} before. '
-        'Please call »gg do push« with »--ask-before-publishing« '
-        'when publishing the first time.',
-      ),
-    );
+    return askBeforePublishing;
   }
 
   /// Commits the lock file if it was modified during publishing.
