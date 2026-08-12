@@ -108,6 +108,13 @@ pub.dev **and** npm, and each manifest decides for its own side (gg_lang's
   rejects, and the alternative is an abort the user can only resolve by hand.
   `gg_multi`'s per-repo gate runs *before* gg_one's publish and reaches the same
   conclusion itself via `hybridVersionsDiffer`.
+- **A first publish is not refused.** `_shouldAskBeforePublishing` only decides
+  whether to confirm (`--ask-before-publishing`) and returns false for a package
+  without any registry. It used to abort a package that no registry knew yet,
+  pointing at »gg do push --ask-before-publishing« — an option `do push` does
+  not have — and naming pub.dev even for a `publish_to: none` hybrid that only
+  goes to npm. The first upload has its own gate in gg_publish's `Publish`,
+  which walks the user through the manual first release.
 - **A hybrid that publishes to pub.dev uses the Dart CHANGELOG flow** and the
   Dart version tag, because pub.dev shows the CHANGELOG on the package page and
   pana scores it. An npm-only hybrid keeps the TypeScript flow. Every
