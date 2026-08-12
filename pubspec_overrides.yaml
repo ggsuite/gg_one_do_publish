@@ -4,5 +4,11 @@
 # change-refs-to-git-feature-branch and change-refs-to-pub-dev
 # remove it again.
 dependency_overrides:
+  gg_one_commit:
+    path: ../gg_one_commit
+  gg_one_core:
+    path: ../gg_one_core
+  gg_one_merge:
+    path: ../gg_one_merge
   gg_publish:
     path: ../gg_publish
