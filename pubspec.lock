@@ -277,10 +277,10 @@ packages:
     dependency: "direct main"
     description:
       name: gg_one_core
-      sha256: "302d1d90c5dc120118c4577fafb81b423083a8c426218835078edaa4552000d8"
+      sha256: "60311dc468fa8c769af4bf0632891babb709cfa77ebe171e9b33baaaac88a055"
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.1"
+    version: "2.4.2"
   gg_one_merge:
     dependency: "direct main"
     description:
@@ -738,4 +738,4 @@ packages:
     source: hosted
     version: "2.2.4"
 sdks:
-  dart: ">=3.11.0 <4.0.0"
+  dart: ">=3.13.0 <4.0.0"

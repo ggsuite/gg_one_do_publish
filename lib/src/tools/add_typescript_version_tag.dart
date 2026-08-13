@@ -19,8 +19,8 @@ class AddTypeScriptVersionTag {
   /// Constructor.
   AddTypeScriptVersionTag({
     required this.ggLog,
-    GgProcessWrapper processWrapper = const GgProcessWrapper(),
-  }) : _processWrapper = processWrapper;
+    this._processWrapper = const GgProcessWrapper(),
+  });
 
   // ...........................................................................
   /// Reads `package.json` version and tags HEAD. Throws on `git tag` failure.

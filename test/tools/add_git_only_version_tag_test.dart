@@ -155,9 +155,8 @@ void main() {
           await initRepo();
 
           final processWrapper = _MockGgProcessWrapper();
-          when(
-            () => processWrapper.run('git', any(), workingDirectory: d.path),
-          ).thenAnswer((_) async => ProcessResult(1, 1, '', 'tag error'));
+          when(() => processWrapper.run('git', any(), workingDirectory: d.path))
+              .thenAnswer((_) async => ProcessResult(1, 1, '', 'tag error'));
 
           final failing = AddGitOnlyVersionTag(
             ggLog: messages.add,

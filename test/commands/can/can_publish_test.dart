@@ -124,9 +124,8 @@ void main() {
     await addAndCommitSampleFile(d);
     await createBranch(d, 'feat_abc');
 
-    File(
-      join(d.path, 'pubspec.yaml'),
-    ).writeAsStringSync('name: test\nrepository: https://foo.com');
+    File(join(d.path, 'pubspec.yaml'))
+        .writeAsStringSync('name: test\nrepository: https://foo.com');
   });
 
   // ...........................................................................
@@ -191,9 +190,8 @@ void main() {
 
     group('OptionalPana', () {
       test('get() delegates to the wrapped pana', () async {
-        when(
-          () => pana.get(directory: d, ggLog: ggLog),
-        ).thenAnswer((_) async => messages.add('pana.get'));
+        when(() => pana.get(directory: d, ggLog: ggLog))
+            .thenAnswer((_) async => messages.add('pana.get'));
 
         final optionalPana = OptionalPana(ggLog: ggLog, pana: pana);
         await optionalPana.get(directory: d, ggLog: ggLog);
