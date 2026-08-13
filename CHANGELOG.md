@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Rework copyright headers
+
 ## 2.5.2 - 2026-08-12
 
 ### Fixed
