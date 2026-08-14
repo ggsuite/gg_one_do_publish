@@ -1,10 +1,11 @@
 // @license
-// Copyright (c) 2025 Göran Hegenberg. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
 import 'package:gg_one_core/gg_one_core.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -96,7 +97,7 @@ class DoPublish extends DirCommand<void> {
     changelog.HasVersion? hasVersion,
     PublishTo? publishTo,
     MergeFlow? mergeFlow,
-    PublishedVersion? publishedVersion,
+    this._publishedVersion,
     GgProcessWrapper processWrapper = const GgProcessWrapper(),
     LocalBranch? localBranch,
     ConfirmDeleteFeatureBranch? confirmDeleteFeatureBranch,
@@ -135,7 +136,6 @@ class DoPublish extends DirCommand<void> {
        _hasVersion = hasVersion ?? changelog.HasVersion(ggLog: ggLog),
        _publishTo = publishTo ?? PublishTo(ggLog: ggLog),
        _mergeFlow = mergeFlow ?? MergeFlow(ggLog: ggLog),
-       _publishedVersion = publishedVersion,
        _processWrapper = processWrapper,
        _localBranch = localBranch ?? LocalBranch(ggLog: ggLog),
        _confirmDeleteFeatureBranch =

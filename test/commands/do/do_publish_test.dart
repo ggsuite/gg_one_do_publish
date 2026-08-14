@@ -1,5 +1,5 @@
 // @license
-// Copyright (c) 2025 Göran Hegenberg. All Rights Reserved.
+// Copyright (c) ggsuite
 //
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
@@ -235,9 +235,8 @@ void main() {
     if (isFreshFixture && freshFixtureHash != null) {
       successHash = freshFixtureHash!;
     } else {
-      successHash = await LastChangesHash(
-        ggLog: ggLog,
-      ).get(directory: d, ggLog: ggLog, ignoreFiles: GgState.ignoreFiles);
+      successHash = await LastChangesHash(ggLog: ggLog)
+          .get(directory: d, ggLog: ggLog, ignoreFiles: GgState.ignoreFiles);
       if (isFreshFixture) {
         freshFixtureHash = successHash;
       }
@@ -547,9 +546,8 @@ void main() {
                         expect(allMessages, contains('✓ Tag 1.2.4 added.'));
 
                         // Was a new version created?
-                        final pubspec = await File(
-                          join(d.path, 'pubspec.yaml'),
-                        ).readAsString();
+                        final pubspec = await File(join(d.path, 'pubspec.yaml'))
+                            .readAsString();
                         final changeLog = await File(
                           join(d.path, 'CHANGELOG.md'),
                         ).readAsString();
@@ -564,25 +562,22 @@ void main() {
 
                         // Did .gg/gg.json mark commit, push and publish done?
                         expect(
-                          await DidCommit(
-                            ggLog: ggLog,
-                          ).get(directory: d, ggLog: ggLog),
+                          await DidCommit(ggLog: ggLog)
+                              .get(directory: d, ggLog: ggLog),
                           isTrue,
                         );
 
                         expect(
-                          await DidPush(
-                            ggLog: ggLog,
-                          ).get(directory: d, ggLog: ggLog),
+                          await DidPush(ggLog: ggLog)
+                              .get(directory: d, ggLog: ggLog),
                           isTrue,
                         );
 
                         // »gg did publish« reads the tags now.
                         final why = <String>[];
                         expect(
-                          await DidPublish(
-                            ggLog: why.add,
-                          ).get(directory: d, ggLog: why.add),
+                          await DidPublish(ggLog: why.add)
+                              .get(directory: d, ggLog: why.add),
                           isTrue,
                           reason: why.join('\n'),
                         );
@@ -687,9 +682,8 @@ void main() {
                 onPublished: any(named: 'onPublished'),
               ),
             ).thenAnswer((_) async {
-              await File(
-                join(d.path, 'pubspec.lock'),
-              ).writeAsString('packages: {}\n');
+              await File(join(d.path, 'pubspec.lock'))
+                  .writeAsString('packages: {}\n');
               publishedVersionValue = Version.parse('1.2.4');
             });
 
@@ -807,9 +801,8 @@ void main() {
 
               // Was a new version created?
               pubspec = await pubspecFile.readAsString();
-              final changeLog = await File(
-                join(d.path, 'CHANGELOG.md'),
-              ).readAsString();
+              final changeLog = await File(join(d.path, 'CHANGELOG.md'))
+                  .readAsString();
               expect(pubspec, contains('version: 1.0.2'));
               expect(changeLog, contains('## 1.0.2 -'));
 
@@ -845,9 +838,8 @@ void main() {
                 await ggDir.create(recursive: true);
               }
               const name = 'gg_localize_refs_publish_to_backup.json';
-              await File(
-                join(ggDir.path, hidden ? '.$name' : name),
-              ).writeAsString(content);
+              await File(join(ggDir.path, hidden ? '.$name' : name))
+                  .writeAsString(content);
             }
 
             test('and points to "gg multi do publish"', () async {
@@ -1029,9 +1021,8 @@ void main() {
               expect(allMessages, isNot(contains('would lose the entries')));
 
               // The pubspec.yaml was not touched
-              final pubspec = await File(
-                join(d.path, 'pubspec.yaml'),
-              ).readAsString();
+              final pubspec = await File(join(d.path, 'pubspec.yaml'))
+                  .readAsString();
               expect(pubspec, contains('version: 1.2.3'));
             });
 
@@ -1095,9 +1086,8 @@ void main() {
               expect(allMessages, contains('Tag 1.2.4 added.'));
 
               // The changelog was sorted. Newest version first.
-              final changeLog = await File(
-                join(d.path, 'CHANGELOG.md'),
-              ).readAsString();
+              final changeLog = await File(join(d.path, 'CHANGELOG.md'))
+                  .readAsString();
               expect(
                 changeLog.indexOf('## 1.2.4'),
                 lessThan(changeLog.indexOf('## 1.2.3')),
@@ -1966,9 +1956,8 @@ void main() {
           expect(allMessages, contains('Tag 1.2.4 added.'));
 
           // package.json was bumped and no CHANGELOG was (re)created.
-          final packageJson = await File(
-            join(d.path, 'package.json'),
-          ).readAsString();
+          final packageJson = await File(join(d.path, 'package.json'))
+              .readAsString();
           expect(packageJson, contains('1.2.4'));
           expect(File(join(d.path, 'CHANGELOG.md')).existsSync(), isFalse);
 
@@ -2850,9 +2839,8 @@ void main() {
       });
 
       void stubGit(List<String> args, {int exitCode = 0}) {
-        when(
-          () => processWrapper.run('git', args, workingDirectory: d.path),
-        ).thenAnswer((_) async => ProcessResult(0, exitCode, '', ''));
+        when(() => processWrapper.run('git', args, workingDirectory: d.path))
+            .thenAnswer((_) async => ProcessResult(0, exitCode, '', ''));
       }
 
       AddVersionTag mockAddVersionTag() {
@@ -3792,9 +3780,8 @@ void main() {
           await File(join(d.path, 'pubspec.yaml')).readAsString(),
           contains('version: 1.2.3'),
         );
-        final changelog = await File(
-          join(d.path, 'CHANGELOG.md'),
-        ).readAsString();
+        final changelog = await File(join(d.path, 'CHANGELOG.md'))
+            .readAsString();
         expect(changelog, contains('## Unreleased'));
         expect(changelog, isNot(contains('## 1.2.4')));
 
@@ -3931,9 +3918,8 @@ void main() {
         mockPublishIsSuccessful(success: true, askBeforePublishing: false);
 
         // An empty `dependency_overrides` redirects nothing.
-        File(
-          join(d.path, 'pubspec_overrides.yaml'),
-        ).writeAsStringSync('dependency_overrides:\n');
+        File(join(d.path, 'pubspec_overrides.yaml'))
+            .writeAsStringSync('dependency_overrides:\n');
 
         await doPublish.exec(
           directory: d,
@@ -4278,9 +4264,8 @@ void main() {
           );
 
       void stubGit(List<String> args, {int exitCode = 0}) {
-        when(
-          () => processWrapper.run('git', args, workingDirectory: d.path),
-        ).thenAnswer((_) async => ProcessResult(0, exitCode, '', ''));
+        when(() => processWrapper.run('git', args, workingDirectory: d.path))
+            .thenAnswer((_) async => ProcessResult(0, exitCode, '', ''));
       }
 
       setUp(() {
@@ -4554,10 +4539,9 @@ void main() {
         writeResumeFixture(channel: 'rc', doneSteps: ['prepare_version']);
         // The bump already happened, so both manifests carry the rc.
         File(join(d.path, 'pubspec.yaml')).writeAsStringSync(
-          File(join(d.path, 'pubspec.yaml')).readAsStringSync().replaceFirst(
-            'version: 1.2.3',
-            'version: 1.2.4-rc.1',
-          ),
+          File(join(d.path, 'pubspec.yaml'))
+              .readAsStringSync()
+              .replaceFirst('version: 1.2.3', 'version: 1.2.4-rc.1'),
         );
         File(
           join(d.path, 'package.json'),
