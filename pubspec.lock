@@ -245,10 +245,10 @@ packages:
     dependency: "direct main"
     description:
       name: gg_lang
-      sha256: "087fc18ede77a85fa568dbc6d3e1102e52f1f79eb02f6b9054ec2d0d4bd4623c"
+      sha256: a6989325792f3de66c01a7728d0063104afd872bf2a2563714475b965bdf48d0
       url: "https://pub.dev"
     source: hosted
-    version: "0.6.0"
+    version: "0.6.1"
   gg_log:
     dependency: "direct main"
     description:
@@ -325,10 +325,10 @@ packages:
     dependency: transitive
     description:
       name: gg_test
-      sha256: "8ef47880d607c64358934a2ec3792d57ad9201b0e39c70a3562df1bfb55b6e30"
+      sha256: "254b23e6ba985f4f041be20da82b41952c7de14ea240f43320a04a588e311da0"
       url: "https://pub.dev"
     source: hosted
-    version: "3.2.0"
+    version: "3.2.1"
   gg_version:
     dependency: "direct main"
     description:
