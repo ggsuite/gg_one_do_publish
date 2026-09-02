@@ -121,13 +121,15 @@ class DidPublish extends DirCommand<bool> {
 
     // Hash comparison, never file contents: git identifies a whole tree by
     // one object id, so identical content is a single string equality.
+    // »<rev>:« names the root tree just like »<rev>^{tree}« does, but without
+    // the caret cmd.exe swallows when git runs through a shell on Windows.
     final releasedTree = await _git(<String>[
       'rev-parse',
-      '$lastTag^{tree}',
+      '$lastTag:',
     ], directory);
     final currentTree = await _git(const <String>[
       'rev-parse',
-      'HEAD^{tree}',
+      'HEAD:',
     ], directory);
     if (releasedTree == currentTree) {
       return true;
