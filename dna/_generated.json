@@ -5,7 +5,7 @@
       "name": "base",
       "package": "helix",
       "ecosystem": null,
-      "resolvedVersion": "1.5.1",
+      "resolvedVersion": "1.6.1",
       "via": null,
       "hash": "0x6883da335b415f9d"
     },
@@ -157,7 +157,7 @@
       "name": "gg-publish",
       "package": "gg_publish",
       "ecosystem": "pub",
-      "resolvedVersion": "4.5.0",
+      "resolvedVersion": "4.6.0",
       "via": "gg-one-core",
       "hash": "0x32b3537fa5495175"
     },
@@ -189,7 +189,7 @@
       "name": "gg-one-core",
       "package": "gg_one_core",
       "ecosystem": "pub",
-      "resolvedVersion": "2.6.0",
+      "resolvedVersion": "2.6.1",
       "via": "gg-one-commit",
       "hash": "0x32b3537fa5495175"
     },
@@ -197,7 +197,7 @@
       "name": "gg-one-commit",
       "package": "gg_one_commit",
       "ecosystem": "pub",
-      "resolvedVersion": "2.4.0",
+      "resolvedVersion": "2.4.1",
       "via": null,
       "hash": "0x32b3537fa5495175"
     },
@@ -205,7 +205,7 @@
       "name": "gg-one-merge",
       "package": "gg_one_merge",
       "ecosystem": "pub",
-      "resolvedVersion": "2.6.0",
+      "resolvedVersion": "2.6.1",
       "via": null,
       "hash": "0x32b3537fa5495175"
     },
@@ -219,9 +219,10 @@
     }
   ],
   "claude": {
-    "claudeMdInclude": null
+    "claudeMdInclude": null,
+    "claudeMdFromDna": false
   },
-  "baseVersion": "1.5.1",
+  "baseVersion": "1.6.1",
   "baseHash": "0x6883da335b415f9d",
   "instances": [
     {
