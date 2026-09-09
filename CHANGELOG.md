@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Test that the build number of pubspec.yaml survives a publish and is counted up
+
 ## 2.7.0 - 2026-09-02
 
 ### Changed

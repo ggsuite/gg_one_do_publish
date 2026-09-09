@@ -10,7 +10,5 @@ dependency_overrides:
     path: ../gg_one_core
   gg_publish:
     path: ../gg_publish
-  gg_version:
-    path: ../gg_version
   gg_one_merge:
     path: ../gg_one_merge
