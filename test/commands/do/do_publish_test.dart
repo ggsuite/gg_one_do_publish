@@ -751,6 +751,47 @@ void main() {
             expect(remoteTags.stdout, contains('1.2.4'));
           });
 
+          test(
+            'keeps the build number of pubspec.yaml and counts it up',
+            () async {
+              mockPublishIsSuccessful(
+                success: true,
+                askBeforePublishing: false,
+              );
+
+              // A Flutter app carries a build number: »1.2.3+155«
+              await File(join(d.path, 'pubspec.yaml')).writeAsString(
+                'name: gg\n\nversion: 1.2.3+155\n'
+                'environment:\n  sdk: ^3.8.0\n'
+                'repository: https://github.com/inlavigo/gg.git',
+              );
+              await commitFile(d, 'pubspec.yaml', message: 'Add build number');
+              await makeLastStateSuccessful();
+
+              await doPublish.exec(
+                directory: d,
+                ggLog: ggLog,
+                askBeforePublishing: false,
+                deleteFeatureBranch: false,
+              );
+
+              // The build number survived and was counted up — everywhere.
+              final pubspec = await File(join(d.path, 'pubspec.yaml'))
+                  .readAsString();
+              expect(pubspec, contains('version: 1.2.4+156'));
+
+              final changelog = await File(join(d.path, 'CHANGELOG.md'))
+                  .readAsString();
+              expect(changelog, contains('## 1.2.4+156 - '));
+              expect(changelog, isNot(contains('## Unreleased')));
+
+              final remoteTags = await Process.run('git', [
+                'tag',
+              ], workingDirectory: dRemote.path);
+              expect(remoteTags.stdout, contains('1.2.4+156'));
+            },
+          );
+
           group('not to pub.dev', () {
             test('when »publish_to: none« in pubspec.yaml', () async {
               doPublish = DoPublish(
