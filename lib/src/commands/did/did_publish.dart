@@ -172,11 +172,14 @@ class DidPublish extends DirCommand<bool> {
   );
 
   // ...........................................................................
-  /// The default branch to read the last release from — `origin/<main>`
-  /// first, the local branch as fallback. Null when neither exists, which
-  /// leaves `git describe` to answer for HEAD.
+  /// The default branch to read the last release from — the branch the
+  /// remote declares (`origin/HEAD`) first, then `origin/<main>`, then the
+  /// local branch as fallback. Null when none exists, which leaves
+  /// `git describe` to answer for HEAD.
   Future<String?> _defaultBranch(Directory directory) async {
-    for (final candidate in const [
+    final declared = await _declaredDefaultBranch(directory);
+    for (final candidate in [
+      if (declared != null) ...['origin/$declared', declared],
       'origin/main',
       'origin/master',
       'main',
@@ -192,6 +195,26 @@ class DidPublish extends DirCommand<bool> {
       }
     }
     return null;
+  }
+
+  /// The branch `refs/remotes/origin/HEAD` points at, or null when the
+  /// remote declares no default branch.
+  Future<String?> _declaredDefaultBranch(Directory directory) async {
+    final target = await _git(
+      <String>[
+        'symbolic-ref',
+        '--quiet',
+        '--short',
+        'refs/remotes/origin/HEAD',
+      ],
+      directory,
+      allowFailure: true,
+    );
+    const prefix = 'origin/';
+    if (!target.startsWith(prefix) || target.length == prefix.length) {
+      return null;
+    }
+    return target.substring(prefix.length);
   }
 }
 

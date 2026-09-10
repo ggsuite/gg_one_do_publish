@@ -84,6 +84,49 @@ void main() {
         );
       });
 
+      test('reads the last release from the branch the remote declares as '
+          'default, even when it is neither main nor master', () async {
+        // The repository releases from develop. Its remote says so.
+        await git(['branch', '-m', 'main', 'develop']);
+        await git(['update-ref', 'refs/remotes/origin/develop', 'develop']);
+        await git([
+          'symbolic-ref',
+          'refs/remotes/origin/HEAD',
+          'refs/remotes/origin/develop',
+        ]);
+
+        // Squash-merged release on develop, not reachable from feat.
+        await git(['checkout', '-b', 'feat']);
+        await addAndCommitSampleFile(
+          d,
+          fileName: 'lib.dart',
+          content: 'void main() {}',
+          message: 'My work',
+        );
+        final tree = await Process.run('git', [
+          'rev-parse',
+          'HEAD:',
+        ], workingDirectory: d.path);
+        final baseSha = await Process.run('git', [
+          'rev-parse',
+          'develop',
+        ], workingDirectory: d.path);
+        final squash = await Process.run('git', [
+          'commit-tree',
+          (tree.stdout as String).trim(),
+          '-p',
+          (baseSha.stdout as String).trim(),
+          '-m',
+          'Release',
+        ], workingDirectory: d.path);
+        final squashSha = (squash.stdout as String).trim();
+        await git(['update-ref', 'refs/heads/develop', squashSha]);
+        await git(['update-ref', 'refs/remotes/origin/develop', squashSha]);
+        await git(['tag', '2.0.0', squashSha]);
+
+        expect(await didPublish.get(directory: d, ggLog: ggLog), isTrue);
+      });
+
       test('survives a squash merge — the tag is not reachable', () async {
         // gg squash-merges the feature branch into main, so the tagged
         // commit is no ancestor of the feature branch. Ancestry would say

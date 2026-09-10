@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.7.2 - 2026-09-11
+
+### Fixed
+
+- `did publish` resolves the declared default branch before falling back to `main`/`master`
+
 ## 2.7.1 - 2026-09-09
 
 ### Changed
