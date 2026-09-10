@@ -292,10 +292,9 @@ packages:
   gg_git:
     dependency: "direct main"
     description:
-      name: gg_git
-      sha256: "53f9b59c9a366534d285e1a97cf43aa9635a90633ecf5f763097ba9b414a3c15"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_git"
+      relative: true
+    source: path
     version: "4.3.0"
   gg_hash:
     dependency: transitive
@@ -348,34 +347,30 @@ packages:
   gg_merge:
     dependency: "direct main"
     description:
-      name: gg_merge
-      sha256: "4e91e5079d12fd4844eb6ccaf51a579f4327430e546d74bebafa85ca7afdb553"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_merge"
+      relative: true
+    source: path
     version: "3.5.0"
   gg_one_commit:
     dependency: "direct main"
     description:
-      name: gg_one_commit
-      sha256: "18262445dbebcf4450db9f6204ecfde2976fc6fc9bec7705fba0abe3959cadf2"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_one_commit"
+      relative: true
+    source: path
     version: "2.4.1"
   gg_one_core:
     dependency: "direct main"
     description:
-      name: gg_one_core
-      sha256: "3fbd6d71faccb5958670b671e09d40b449d230313bbb67034c1d7674059d7484"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_one_core"
+      relative: true
+    source: path
     version: "2.6.1"
   gg_one_merge:
     dependency: "direct main"
     description:
-      name: gg_one_merge
-      sha256: "4541c378002c9828a0a262724fa168c22f96743c0e96b8e8e03ca17e403b5036"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_one_merge"
+      relative: true
+    source: path
     version: "2.6.1"
   gg_process:
     dependency: "direct main"
@@ -396,10 +391,9 @@ packages:
   gg_publish:
     dependency: "direct main"
     description:
-      name: gg_publish
-      sha256: f9410b8ae30f448e4df2c5ed444704d998d55590d1bbc2a0eaf37ebcf705b823
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_publish"
+      relative: true
+    source: path
     version: "4.6.0"
   gg_status_printer:
     dependency: "direct main"
@@ -420,10 +414,9 @@ packages:
   gg_version:
     dependency: "direct main"
     description:
-      name: gg_version
-      sha256: ab486538f8b26222bccb0cd33891e89cbc838eda2a62958a69a135c47310ab37
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_version"
+      relative: true
+    source: path
     version: "5.4.0"
   glob:
     dependency: transitive
@@ -437,10 +430,10 @@ packages:
     dependency: "direct dev"
     description:
       name: helix
-      sha256: "6aa59015fdd276cc376694f0d8c7c51c01bc897f3b599f0addfb9030870b7058"
+      sha256: "21f84973cf4c18ca001aea45cb33fe8aa1d0e17270aedf300cedd6cc9ec92078"
       url: "https://pub.dev"
     source: hosted
-    version: "1.6.1"
+    version: "1.7.1"
   http:
     dependency: transitive
     description:
