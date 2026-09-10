@@ -18,3 +18,7 @@ dependency_overrides:
     path: ../gg_version
   gg_one_merge:
     path: ../gg_one_merge
+  gg_lang:
+    path: ../gg_lang
+  gg_test:
+    path: ../gg_test

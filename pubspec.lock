@@ -331,11 +331,10 @@ packages:
   gg_lang:
     dependency: "direct main"
     description:
-      name: gg_lang
-      sha256: a6989325792f3de66c01a7728d0063104afd872bf2a2563714475b965bdf48d0
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.6.1"
+      path: "../gg_lang"
+      relative: true
+    source: path
+    version: "0.7.0"
   gg_log:
     dependency: "direct main"
     description:
@@ -404,12 +403,11 @@ packages:
     source: hosted
     version: "1.6.0"
   gg_test:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: gg_test
-      sha256: "05af36ae2c6f1ecc4ff5dfbe9a2a0c0e7baf8cc7c9512ee4c74d453d727041ce"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_test"
+      relative: true
+    source: path
     version: "3.3.0"
   gg_version:
     dependency: "direct main"
