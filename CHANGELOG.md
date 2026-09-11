@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.8.0 - 2026-09-11
+
+### Fixed
+
+- `gg one do publish` pushes, checks out and tags the repository's default branch instead of assuming `main`/`master`; `did publish` shares gg_git's `DefaultBranch`
+
 ## 2.7.2 - 2026-09-11
 
 ### Fixed

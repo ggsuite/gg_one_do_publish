@@ -106,6 +106,7 @@ class DoPublish extends DirCommand<void> {
     WaitUntilPublished? waitUntilPublished,
     SyncHybridVersions? syncHybridVersions,
     DoUpgradeDeps? upgradeDeps,
+    MainBranch? mainBranch,
     // coverage:ignore-start
   }) : _canPublish = canPublish ?? CanPublish(ggLog: ggLog),
        _publishToPubDev = publish ?? Publish(ggLog: ggLog),
@@ -148,7 +149,8 @@ class DoPublish extends DirCommand<void> {
            waitUntilPublished ?? WaitUntilPublished(ggLog: ggLog),
        _syncHybridVersions =
            syncHybridVersions ?? SyncHybridVersions(ggLog: ggLog),
-       _upgradeDeps = upgradeDeps ?? DoUpgradeDeps(ggLog: ggLog) {
+       _upgradeDeps = upgradeDeps ?? DoUpgradeDeps(ggLog: ggLog),
+       _mainBranch = mainBranch ?? MainBranch(ggLog: ggLog) {
     // coverage:ignore-end
     _addArgs();
   }
@@ -322,7 +324,7 @@ class DoPublish extends DirCommand<void> {
         ggLog: <String>[].add,
       );
       final onDefaultBranch =
-          currentBranch == 'main' || currentBranch == 'master';
+          currentBranch == await _defaultBranchName(directory);
       if (staleBranch != null &&
           staleBranch != currentBranch &&
           !onDefaultBranch) {
@@ -597,7 +599,8 @@ class DoPublish extends DirCommand<void> {
     // The final merge goes through an auto-merge pull request by default
     // (--pr): the PR is created with automerge, the publish waits until the
     // provider merged it, then continues. --no-pr restores the local merge
-    // followed by a direct push to main. Providers without PR support
+    // followed by a direct push of the default branch. Providers without PR
+    // support
     // (anything but GitHub/Azure DevOps) fall back to the local merge with a
     // warning.
     final viaPullRequest =
@@ -898,6 +901,12 @@ class DoPublish extends DirCommand<void> {
   final EnsurePublishConfigIgnored _ensureIgnored;
   final WaitUntilPublished _waitUntilPublished;
 
+  /// Resolves the default branch — what the remote declares as `origin/HEAD`,
+  /// else a local `main`/`master`. The same resolver the merge flow uses, so
+  /// the push, the checkout and the tag land on the branch the merge
+  /// targeted.
+  final MainBranch _mainBranch;
+
   /// Pre-resolved version increment; always set before the steps run.
   String? _explicitVersionIncrement;
 
@@ -1085,8 +1094,8 @@ class DoPublish extends DirCommand<void> {
 
   /// Performs the merge. With [viaPullRequest] this merges through an
   /// auto-merge pull request and waits until it is merged; otherwise it does
-  /// a local merge into main. [deleteSourceBranch] lets the provider delete
-  /// the feature branch when it completes the pull request.
+  /// a local merge into the default branch. [deleteSourceBranch] lets the
+  /// provider delete the feature branch when it completes the pull request.
   ///
   /// The merge logs stay visible in non-verbose mode too: the pull-request
   /// flow can block for minutes (provider CI + automerge), and without the
@@ -1149,33 +1158,36 @@ class DoPublish extends DirCommand<void> {
     return true;
   }
 
-  /// The name of the local default branch (`main`/`master`), or null when
-  /// the repository has neither.
-  Future<String?> _defaultBranchName(Directory directory) async {
-    for (final candidate in ['main', 'master']) {
-      final exists = await _processWrapper.run('git', [
-        'rev-parse',
-        '--verify',
-        '--quiet',
-        'refs/heads/$candidate',
-      ], workingDirectory: directory.path);
-      if (exists.exitCode == 0) {
-        return candidate;
-      }
+  /// The name of the repository's default branch: the branch the remote
+  /// declares as `origin/HEAD` — `develop`, say — else a local `main` or
+  /// `master`. It is the branch the merge step released into, so it is also
+  /// the branch to push, to check out and to tag.
+  ///
+  /// A repository without a default branch cannot be released: the merge
+  /// would have had no target, and a silent skip here used to leave the
+  /// release unpushed and the tag on the feature branch. So this throws.
+  Future<String> _defaultBranchName(Directory directory) async {
+    try {
+      return await _mainBranch.get(directory: directory, ggLog: <String>[].add);
+    } on ArgumentError catch (e) {
+      throw Exception(
+        cError(
+          'No default branch found in ${directory.path}: ${e.message} '
+          'Declare it with "git remote set-head origin --auto" or create '
+          'a "main" branch.',
+        ),
+      );
     }
-    return null;
   }
 
   /// Pushes the local default branch to origin as a bare ref — WITHOUT
-  /// checking it out, so no editor tooling ever sees an old main state in
+  /// checking it out, so no editor tooling ever sees an old default-branch
+  /// state in
   /// the worktree. Used by the local merge flow, whose squash commit exists
   /// only locally until this push. Idempotent: an already-pushed ref is a
   /// no-op ("Everything up-to-date").
   Future<void> _pushDefaultBranchRef(Directory directory) async {
     final branch = await _defaultBranchName(directory);
-    if (branch == null) {
-      return;
-    }
 
     final result = await _processWrapper.run('git', [
       'push',
@@ -1190,16 +1202,14 @@ class DoPublish extends DirCommand<void> {
     ggLog(cDetail('✓ Pushed $branch.'));
   }
 
-  /// Checks out the default branch (`main`/`master`): the release commit to
-  /// tag lives there, not on the feature branch HEAD may be on. The only
-  /// place of the whole publish that checks the default branch out — and it
-  /// runs after the merge, so the worktree switches to content that is
-  /// identical to the feature branch, never to an old main state.
+  /// Checks out the default branch (see [_defaultBranchName]): the release
+  /// commit to tag lives there, not on the feature branch HEAD may be on.
+  /// The only place of the whole publish that checks the default branch
+  /// out — and it runs after the merge, so the worktree switches to content
+  /// that is identical to the feature branch, never to an old default-branch
+  /// state.
   Future<void> _checkoutDefaultBranch(Directory directory) async {
     final candidate = await _defaultBranchName(directory);
-    if (candidate == null) {
-      return;
-    }
     final current = await _localBranch.get(
       directory: directory,
       ggLog: <String>[].add,

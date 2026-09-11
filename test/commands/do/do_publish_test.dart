@@ -80,12 +80,15 @@ void main() {
   // bookkeeping on top when a hash was not aligned yet. HEAD itself ends up
   // back on the feature branch, so the history is read from `main`
   // explicitly.
-  Future<String> mergeMessageBelowStateCommit(Directory dir) async {
+  Future<String> mergeMessageBelowStateCommit(
+    Directory dir, {
+    String branch = 'main',
+  }) async {
     final result = await Process.run('git', [
       'log',
       '-2',
       '--format=%s',
-      'main',
+      branch,
     ], workingDirectory: dir.path);
     final lines = (result.stdout as String).trim().split('\n');
     return lines.first == '#gg: Add .gg/gg.json check results'
@@ -267,114 +270,17 @@ void main() {
   }
 
   // ...........................................................................
-  setUp(() async {
-    // Create repositories from a template that is built only once per
-    // test file and copied for every test.
-    (d, dRemote) = await initCachedRepoPair(
-      key: 'do_publish_base',
-      build: (local, remote) async {
-        await initLocalGit(local);
-        await enableEolLf(local);
-        await initRemoteGit(remote);
-        await addRemoteToLocal(local: local, remote: remote);
-
-        // Setup a pubspec.yaml and a CHANGELOG.md with right versions.
-        // The SDK constraint is not decoration: `can push` runs `pub get
-        // --offline` before `isCommitted`, and pub refuses a manifest
-        // without a lower bound.
-        await File(join(local.path, 'pubspec.yaml')).writeAsString(
-          'name: gg\n\nversion: 1.2.3\n'
-          'environment:\n  sdk: ^3.8.0\n'
-          'repository: https://github.com/inlavigo/gg.git',
-        );
-
-        // Prepare ChangeLog
-        await File(join(local.path, 'CHANGELOG.md')).writeAsString(
-          '# Changelog\n\n'
-          '## Unreleased\n'
-          '-Message 1\n'
-          '-Message 2\n'
-          '## 1.2.3 - 2024-04-05\n\n- First version',
-        );
-
-        await addAndCommitSampleFile(
-          local,
-          fileName: 'CLAUDE.md',
-          content: 'This is the CLAUDE.md',
-        );
-        final runner = CommandRunner<void>('gg', 'gg')
-          ..addCommand(CreateTicket(ggLog: ggLog));
-        await runner.run([
-          'ticket',
-          '-i',
-          local.path,
-          'feat_abc',
-          '-m',
-          'Ticket merge message',
-        ]);
-        await commitFile(local, 'CLAUDE.md');
-        await addAndCommitSampleFile(
-          local,
-          fileName: 'README.md',
-          content: 'This is the readme',
-        );
-        await pushLocalChangesUpstream(local, 'feat_abc');
-      },
-    );
-    publishedVersionValue = Version.parse('1.2.3');
-
-    // Clear messages
-    messages.clear();
-
-    // Create a .gg/gg.json that has all preconditions for publishing
-    needsChangeHash = 12345;
-
-    // Mock publishing
-    dMock = () => any(
-      named: 'directory',
-      that: predicate<Directory>((x) => x.path == d.path),
-    );
-    registerFallbackValue(d);
-    registerFallbackValue(Version(0, 0, 0));
-    registerFallbackValue(PublishTarget.pubDev);
-    publish = MockPublish();
-    waitUntilPublished = MockWaitUntilPublished();
-    upgradeDeps = MockDoUpgradeDeps();
-    upgradeDeps.mockExec(result: null);
-    when(
-      () => waitUntilPublished.get(
-        directory: any(named: 'directory'),
-        ggLog: any(named: 'ggLog'),
-      ),
-    ).thenAnswer((_) async {});
-    processWrapper = MockGgProcessWrapper();
-    localBranch = MockLocalBranch();
-
-    // The publish switches between the feature and the default branch, and
-    // the checkout helpers consult LocalBranch for where HEAD currently is —
-    // a fixed answer would make them skip or repeat checkouts. The mock
-    // therefore reports the real repository; tests that need a fixed branch
-    // override it.
-    when(
-      () => localBranch.get(
-        directory: any(named: 'directory'),
-        ggLog: any(named: 'ggLog'),
-      ),
-    ).thenAnswer((_) async {
-      final result = await Process.run('git', [
-        'rev-parse',
-        '--abbrev-ref',
-        'HEAD',
-      ], workingDirectory: d.path);
-      return (result.stdout as String).trim();
-    });
-
-    // The branch switches and the bare-ref push of the default branch run
-    // through the injectable process wrapper. Delegate them to the real
-    // repository by default, so the integration tests actually change
-    // branches and push; tests that assert the behavior itself override
-    // these stubs with fakes.
-    for (final branch in ['main', 'master']) {
+  // The branch switches and the bare-ref push of the default branch run
+  // through the injectable process wrapper. Delegate them to the real
+  // repository by default, so the integration tests actually change
+  // branches and push; tests that assert the behavior itself override
+  // these stubs with fakes. [defaultBranches] names the branches a publish
+  // may push and check out besides the feature branches — `main`/`master`
+  // for the base fixture, `develop` for the fixture whose remote declares
+  // that one. Bound to the current [d], so a test that swaps the fixture
+  // calls it again.
+  void stubProcessWrapper({required List<String> defaultBranches}) {
+    for (final branch in defaultBranches) {
       when(
         () => processWrapper.run('git', [
           'push',
@@ -389,22 +295,7 @@ void main() {
         ], workingDirectory: d.path),
       );
     }
-    for (final branch in ['main', 'master', 'feat_abc', 'feat_other']) {
-      when(
-        () => processWrapper.run('git', [
-          'rev-parse',
-          '--verify',
-          '--quiet',
-          'refs/heads/$branch',
-        ], workingDirectory: d.path),
-      ).thenAnswer(
-        (_) => Process.run('git', [
-          'rev-parse',
-          '--verify',
-          '--quiet',
-          'refs/heads/$branch',
-        ], workingDirectory: d.path),
-      );
+    for (final branch in [...defaultBranches, 'feat_abc', 'feat_other']) {
       when(
         () => processWrapper.run('git', [
           'checkout',
@@ -468,6 +359,157 @@ void main() {
       (_) async =>
           ProcessResult(0, 0, 'https://git.example.com/inlavigo/gg.git', ''),
     );
+  }
+
+  // ...........................................................................
+  Future<void> gitOrThrow(Directory dir, List<String> args) async {
+    final result = await Process.run('git', args, workingDirectory: dir.path);
+    if (result.exitCode != 0) {
+      throw Exception('git ${args.join(' ')} failed: ${result.stderr}');
+    }
+  }
+
+  // ...........................................................................
+  // Builds the test repository pair: a local repository with the ticket
+  // branch feat_abc checked out, and a bare origin that carries the
+  // [defaultBranch] and feat_abc. With `main` the pair is what
+  // [addRemoteToLocal] sets up. Any other name models a repository that
+  // releases from a branch like `develop`: the bare origin's HEAD points at
+  // it, the local clone records that as `origin/HEAD` — exactly what
+  // `git clone` leaves behind — and no `main` exists anywhere.
+  Future<void> buildFixture(
+    Directory local,
+    Directory remote, {
+    required String defaultBranch,
+  }) async {
+    await initLocalGit(local);
+    await enableEolLf(local);
+    await initRemoteGit(remote);
+    if (defaultBranch == 'main') {
+      await addRemoteToLocal(local: local, remote: remote);
+    } else {
+      await gitOrThrow(local, ['branch', '-m', 'main', defaultBranch]);
+      await gitOrThrow(remote, [
+        'symbolic-ref',
+        'HEAD',
+        'refs/heads/$defaultBranch',
+      ]);
+      await gitOrThrow(local, ['remote', 'add', 'origin', remote.path]);
+      await addAndCommitSampleFile(
+        local,
+        fileName: 'init',
+        content: 'Initial commit',
+      );
+      await gitOrThrow(local, [
+        'push',
+        '--set-upstream',
+        'origin',
+        defaultBranch,
+      ]);
+      await gitOrThrow(local, ['remote', 'set-head', 'origin', '--auto']);
+    }
+
+    // Setup a pubspec.yaml and a CHANGELOG.md with right versions.
+    // The SDK constraint is not decoration: `can push` runs `pub get
+    // --offline` before `isCommitted`, and pub refuses a manifest
+    // without a lower bound.
+    await File(join(local.path, 'pubspec.yaml')).writeAsString(
+      'name: gg\n\nversion: 1.2.3\n'
+      'environment:\n  sdk: ^3.8.0\n'
+      'repository: https://github.com/inlavigo/gg.git',
+    );
+
+    // Prepare ChangeLog
+    await File(join(local.path, 'CHANGELOG.md')).writeAsString(
+      '# Changelog\n\n'
+      '## Unreleased\n'
+      '-Message 1\n'
+      '-Message 2\n'
+      '## 1.2.3 - 2024-04-05\n\n- First version',
+    );
+
+    await addAndCommitSampleFile(
+      local,
+      fileName: 'CLAUDE.md',
+      content: 'This is the CLAUDE.md',
+    );
+    final runner = CommandRunner<void>('gg', 'gg')
+      ..addCommand(CreateTicket(ggLog: ggLog));
+    await runner.run([
+      'ticket',
+      '-i',
+      local.path,
+      'feat_abc',
+      '-m',
+      'Ticket merge message',
+    ]);
+    await commitFile(local, 'CLAUDE.md');
+    await addAndCommitSampleFile(
+      local,
+      fileName: 'README.md',
+      content: 'This is the readme',
+    );
+    await pushLocalChangesUpstream(local, 'feat_abc');
+  }
+
+  // ...........................................................................
+  setUp(() async {
+    // Create repositories from a template that is built only once per
+    // test file and copied for every test.
+    (d, dRemote) = await initCachedRepoPair(
+      key: 'do_publish_base',
+      build: (local, remote) =>
+          buildFixture(local, remote, defaultBranch: 'main'),
+    );
+    publishedVersionValue = Version.parse('1.2.3');
+
+    // Clear messages
+    messages.clear();
+
+    // Create a .gg/gg.json that has all preconditions for publishing
+    needsChangeHash = 12345;
+
+    // Mock publishing
+    dMock = () => any(
+      named: 'directory',
+      that: predicate<Directory>((x) => x.path == d.path),
+    );
+    registerFallbackValue(d);
+    registerFallbackValue(Version(0, 0, 0));
+    registerFallbackValue(PublishTarget.pubDev);
+    publish = MockPublish();
+    waitUntilPublished = MockWaitUntilPublished();
+    upgradeDeps = MockDoUpgradeDeps();
+    upgradeDeps.mockExec(result: null);
+    when(
+      () => waitUntilPublished.get(
+        directory: any(named: 'directory'),
+        ggLog: any(named: 'ggLog'),
+      ),
+    ).thenAnswer((_) async {});
+    processWrapper = MockGgProcessWrapper();
+    localBranch = MockLocalBranch();
+
+    // The publish switches between the feature and the default branch, and
+    // the checkout helpers consult LocalBranch for where HEAD currently is —
+    // a fixed answer would make them skip or repeat checkouts. The mock
+    // therefore reports the real repository; tests that need a fixed branch
+    // override it.
+    when(
+      () => localBranch.get(
+        directory: any(named: 'directory'),
+        ggLog: any(named: 'ggLog'),
+      ),
+    ).thenAnswer((_) async {
+      final result = await Process.run('git', [
+        'rev-parse',
+        '--abbrev-ref',
+        'HEAD',
+      ], workingDirectory: d.path);
+      return (result.stdout as String).trim();
+    });
+
+    stubProcessWrapper(defaultBranches: const ['main', 'master']);
 
     publishedVersion = MockPublishedVersion();
 
@@ -2899,6 +2941,7 @@ void main() {
         AddVersionTag? addVersionTag,
         EditMessage? editMessage,
         ConfirmDeleteFeatureBranch? confirmDeleteFeatureBranch,
+        MainBranch? mainBranch,
       }) => DoPublish(
         upgradeDeps: upgradeDeps,
         waitUntilPublished: waitUntilPublished,
@@ -2921,7 +2964,27 @@ void main() {
         confirmDeleteFeatureBranch:
             confirmDeleteFeatureBranch ?? defaultConfirmDeleteFeatureBranch,
         mergeFlow: noPubGetMergeFlow(),
+        mainBranch: mainBranch,
       );
+
+      // A MainBranch that answers [name] — or, with [name] null, has no
+      // answer, the way the real one has none for a repository without a
+      // default branch.
+      MainBranch mockMainBranch(String? name) {
+        final mainBranch = MockMainBranch();
+        when(
+          () => mainBranch.get(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+          ),
+        ).thenAnswer((_) async {
+          if (name == null) {
+            throw ArgumentError('Could not determine the main branch.');
+          }
+          return name;
+        });
+        return mainBranch;
+      }
 
       test('--continue without a saved run throws a clear error', () async {
         final runner = CommandRunner<void>('gg', 'gg')..addCommand(doPublish);
@@ -3094,7 +3157,6 @@ void main() {
   "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
 }
 ''');
-          stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
           final tag = mockAddVersionTag();
           final resumePublish = makeResumePublish(addVersionTag: tag);
           final runner = CommandRunner<void>('gg', 'gg')
@@ -3169,7 +3231,6 @@ void main() {
   "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
 }
 ''');
-        stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
         stubGit(['checkout', 'main']);
         final tag = mockAddVersionTag();
         final resumePublish = makeResumePublish(addVersionTag: tag);
@@ -3297,7 +3358,6 @@ void main() {
   "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
 }
 ''');
-        stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
         stubGit(['checkout', 'main']);
         stubGit(['push', 'origin', '--delete', 'feat_other']);
 
@@ -3360,7 +3420,6 @@ void main() {
   "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
 }
 ''');
-          stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
           stubGit(['checkout', 'main']);
           stubGit(['push', 'origin', '--delete', 'feat_other']);
 
@@ -3416,7 +3475,6 @@ void main() {
   "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
 }
 ''');
-          stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
           stubGit(['checkout', 'main']);
           when(
             () => processWrapper.run('git', [
@@ -3545,38 +3603,41 @@ void main() {
 ''');
         }
 
-        test('falls back to master when main does not exist', () async {
+        test('follows the branch MainBranch resolves, e.g. master', () async {
+          // The name is not guessed here: MainBranch answers it — from
+          // origin/HEAD, else main/master — and the push, the checkout and
+          // the tag follow that answer.
           await writeMergedRuntimeFile();
-          stubGit([
-            'rev-parse',
-            '--verify',
-            '--quiet',
-            'refs/heads/main',
-          ], exitCode: 1);
-          stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/master']);
           stubGit(['checkout', 'master']);
           stubGit(['push', 'origin', 'master']);
 
-          await makeResumePublish().exec(
+          await makeResumePublish(mainBranch: mockMainBranch('master')).exec(
             directory: d,
             ggLog: ggLog,
             resume: true,
             deleteFeatureBranch: false,
           );
 
-          // Exactly once — for the tag step; the main push moves the bare
-          // ref without a checkout.
+          // Pushed as a bare ref, checked out exactly once — for the tag
+          // step.
+          verify(
+            () => processWrapper.run('git', [
+              'push',
+              'origin',
+              'master',
+            ], workingDirectory: d.path),
+          ).called(1);
           verify(
             () => processWrapper.run('git', [
               'checkout',
               'master',
             ], workingDirectory: d.path),
           ).called(1);
+          expect(messages.join('\n'), contains('✓ Pushed master.'));
         });
 
         test('does not check out when already on the default branch', () async {
           await writeMergedRuntimeFile();
-          stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
           when(
             () => localBranch.get(
               directory: any(named: 'directory'),
@@ -3599,34 +3660,55 @@ void main() {
           );
         });
 
-        test('tolerates a repo without main and master', () async {
+        test('throws when the repository has no default branch', () async {
+          // Used to be tolerated silently: the push of the merged branch
+          // was skipped, the tag landed on the feature branch and the run
+          // still reported success. Without a default branch there is no
+          // branch the release could live on — so the run stops, and the
+          // progress stays for a resume after the repository was fixed.
           await writeMergedRuntimeFile();
-          stubGit([
-            'rev-parse',
-            '--verify',
-            '--quiet',
-            'refs/heads/main',
-          ], exitCode: 1);
-          stubGit([
-            'rev-parse',
-            '--verify',
-            '--quiet',
-            'refs/heads/master',
-          ], exitCode: 1);
 
-          await makeResumePublish().exec(
-            directory: d,
-            ggLog: ggLog,
-            resume: true,
-            deleteFeatureBranch: false,
+          await expectLater(
+            () => makeResumePublish(mainBranch: mockMainBranch(null)).exec(
+              directory: d,
+              ggLog: ggLog,
+              resume: true,
+              deleteFeatureBranch: false,
+            ),
+            throwsA(
+              isA<Exception>().having(
+                (e) => rmControls(e.toString()),
+                'message',
+                allOf(
+                  contains('No default branch found in ${d.path}'),
+                  contains('Could not determine the main branch.'),
+                  contains('git remote set-head origin --auto'),
+                ),
+              ),
+            ),
           );
 
-          expect(runtimeFile.existsSync(), isFalse);
+          // Nothing was pushed, checked out or tagged in the meantime.
+          for (final branch in ['main', 'master']) {
+            verifyNever(
+              () => processWrapper.run('git', [
+                'push',
+                'origin',
+                branch,
+              ], workingDirectory: d.path),
+            );
+            verifyNever(
+              () => processWrapper.run('git', [
+                'checkout',
+                branch,
+              ], workingDirectory: d.path),
+            );
+          }
+          expect(runtimeFile.existsSync(), isTrue);
         });
 
         test('throws when the checkout fails', () async {
           await writeMergedRuntimeFile();
-          stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
           stubGit(['checkout', 'main'], exitCode: 1);
 
           await expectLater(
@@ -3676,6 +3758,178 @@ void main() {
         expect(headMessage, 'Reconfigured');
         expect(runtimeFile.existsSync(), isFalse);
       });
+    });
+
+    group('on a repository whose default branch is develop', () {
+      // The bare origin's HEAD points at develop, the local clone records
+      // that as origin/HEAD, and no main exists anywhere. The publish used
+      // to look for a local main/master only: it found none, silently
+      // skipped the push of the merged default branch — the release stayed
+      // local while the registry upload went ahead — and tagged the feature
+      // branch HEAD instead of the release commit, so »gg did publish«
+      // could not find the tag afterwards.
+      setUp(() async {
+        // Swap the base fixture for the develop one. The mocks read [d]
+        // lazily; only the process-wrapper stubs are bound to its path.
+        await d.delete(recursive: true);
+        await dRemote.delete(recursive: true);
+        (d, dRemote) = await initCachedRepoPair(
+          key: 'do_publish_develop',
+          build: (local, remote) =>
+              buildFixture(local, remote, defaultBranch: 'develop'),
+        );
+        stubProcessWrapper(defaultBranches: const ['develop']);
+        await makeLastStateSuccessful();
+        messages.clear();
+      });
+
+      Future<String> sha(Directory dir, String rev) async {
+        final result = await Process.run('git', [
+          'rev-list',
+          '-n',
+          '1',
+          rev,
+        ], workingDirectory: dir.path);
+        return (result.stdout as String).trim();
+      }
+
+      test('the fixture has no main and declares develop', () async {
+        expect(await sha(d, 'main'), isEmpty);
+        expect(await sha(dRemote, 'main'), isEmpty);
+        expect(await sha(dRemote, 'develop'), await sha(d, 'develop'));
+        final head = await Process.run('git', [
+          'symbolic-ref',
+          '--short',
+          'refs/remotes/origin/HEAD',
+        ], workingDirectory: d.path);
+        expect((head.stdout as String).trim(), 'origin/develop');
+        expect(await branchName(d), 'feat_abc');
+      });
+
+      test('pushes, checks out and tags develop', () async {
+        mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+
+        await doPublish.exec(
+          directory: d,
+          ggLog: ggLog,
+          askBeforePublishing: false,
+          deleteFeatureBranch: false,
+        );
+
+        final allMessages = messages.join('\n');
+        expect(allMessages, contains('✓ Pushed develop.'));
+        expect(allMessages, contains('Checked out develop.'));
+        expect(allMessages, contains('✓ Tag 1.2.4 added.'));
+        expect(allMessages, contains('Checked out feat_abc.'));
+
+        // The squash merge landed on develop and reached origin.
+        final release = await sha(d, 'develop');
+        expect(await sha(dRemote, 'develop'), release);
+        expect(
+          await mergeMessageBelowStateCommit(d, branch: 'develop'),
+          'Ticket merge message',
+        );
+
+        // The tag sits on that release commit — locally and on origin — not
+        // on the feature branch HEAD the publish started from.
+        expect(await sha(d, '1.2.4'), release);
+        expect(await sha(dRemote, '1.2.4'), release);
+        expect(await sha(d, 'feat_abc'), isNot(release));
+
+        // Work continues on the ticket branch.
+        expect(await branchName(d), 'feat_abc');
+
+        // And »gg did publish« finds the release on develop.
+        final why = <String>[];
+        expect(
+          await DidPublish(ggLog: why.add).get(directory: d, ggLog: why.add),
+          isTrue,
+          reason: why.join('\n'),
+        );
+      });
+
+      test(
+        'keeps the progress of a resumed run whose HEAD is on develop',
+        () async {
+          // After its merge a resumed run sits on develop. The stale-progress
+          // check used to accept only main/master as »the default branch«, so
+          // it discarded the progress and refused with »nothing to continue«.
+          when(
+            () => localBranch.get(
+              directory: any(named: 'directory'),
+              ggLog: any(named: 'ggLog'),
+            ),
+          ).thenAnswer((_) async => 'develop');
+          final runtimeFile = File(join(d.path, '.gg', 'gg-publish.json'));
+          runtimeFile.writeAsStringSync('''
+{
+  "version_increment": "patch",
+  "merge_message": "m",
+  "branch": "feat_abc",
+  "done_steps": ["prepare_version", "publish_registry_pub_dev", "merge"]
+}
+''');
+          final tag = _MockAddVersionTag();
+          when(
+            () => tag.exec(
+              directory: any<Directory>(named: 'directory'),
+              ggLog: any<GgLog>(named: 'ggLog'),
+            ),
+          ).thenAnswer((_) async {});
+          final resumePublish = DoPublish(
+            upgradeDeps: upgradeDeps,
+            waitUntilPublished: waitUntilPublished,
+            ggLog: ggLog,
+            publish: publish,
+            prepareNextVersion: PrepareNextVersion(
+              ggLog: ggLog,
+              publishedVersion: publishedVersion,
+            ),
+            canPublish: canPublish,
+            addVersionTag: tag,
+            configurePublish: makeConfigurePublish(
+              editMessage: (_) async =>
+                  fail('Editor must not open on a resumed run.'),
+            ),
+            publishedVersion: publishedVersion,
+            processWrapper: processWrapper,
+            localBranch: localBranch,
+            confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+            mergeFlow: noPubGetMergeFlow(),
+          );
+
+          final runner = CommandRunner<void>('gg', 'gg')
+            ..addCommand(resumePublish);
+          await runner.run([
+            'publish',
+            '-i',
+            d.path,
+            '--continue',
+            '--no-delete-feature-branch',
+          ]);
+
+          final allMessages = messages.join('\n');
+          expect(allMessages, contains('Resuming the unfinished publish'));
+          expect(
+            allMessages,
+            isNot(contains('stale leftover of another publish')),
+          );
+          // HEAD reported as develop already — no checkout for the tag step.
+          verifyNever(
+            () => processWrapper.run('git', [
+              'checkout',
+              'develop',
+            ], workingDirectory: d.path),
+          );
+          verify(
+            () => tag.exec(
+              directory: any<Directory>(named: 'directory'),
+              ggLog: any<GgLog>(named: 'ggLog'),
+            ),
+          ).called(1);
+          expect(runtimeFile.existsSync(), isFalse);
+        },
+      );
     });
 
     group('when a previous publish left the version tag behind', () {
@@ -4681,7 +4935,6 @@ void main() {
         mockPublishedVersion();
         mockPublishIsSuccessful(success: true, askBeforePublishing: false);
 
-        stubGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
         stubGit(['checkout', 'main']);
 
         final noSync = MockSyncHybridVersions();
