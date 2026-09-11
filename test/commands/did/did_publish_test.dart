@@ -6,9 +6,11 @@
 
 import 'dart:io';
 
+import 'package:gg_git/gg_git.dart';
 import 'package:gg_git/gg_git_test_helpers.dart';
 import 'package:gg_log/gg_log.dart';
 import 'package:gg_one_do_publish/gg_one_do_publish.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -126,6 +128,111 @@ void main() {
 
         expect(await didPublish.get(directory: d, ggLog: ggLog), isTrue);
       });
+
+      test('reads the last release from a bare origin whose HEAD is develop '
+          'and which has no main at all', () async {
+        // What a clone of such a repository looks like: origin/HEAD records
+        // the remote's default branch, the local branch of the same name
+        // tracks it, and neither side has a main or master.
+        final remote = await Directory.systemTemp.createTemp();
+        addTearDown(() => remote.deleteSync(recursive: true));
+        await initRemoteGit(remote);
+        await Process.run('git', [
+          'symbolic-ref',
+          'HEAD',
+          'refs/heads/develop',
+        ], workingDirectory: remote.path);
+        await git(['branch', '-m', 'main', 'develop']);
+        await git(['remote', 'add', 'origin', remote.path]);
+        await git(['push', '--set-upstream', 'origin', 'develop']);
+        await git(['remote', 'set-head', 'origin', '--auto']);
+
+        // The release: a squash commit on develop, tagged and pushed. The
+        // feature branch keeps its own commit, so the tag is no ancestor.
+        await git(['checkout', '-b', 'feat']);
+        await addAndCommitSampleFile(
+          d,
+          fileName: 'lib.dart',
+          content: 'void main() {}',
+          message: 'My work',
+        );
+        final tree = await Process.run('git', [
+          'rev-parse',
+          'HEAD:',
+        ], workingDirectory: d.path);
+        final baseSha = await Process.run('git', [
+          'rev-parse',
+          'develop',
+        ], workingDirectory: d.path);
+        final squash = await Process.run('git', [
+          'commit-tree',
+          (tree.stdout as String).trim(),
+          '-p',
+          (baseSha.stdout as String).trim(),
+          '-m',
+          'Release',
+        ], workingDirectory: d.path);
+        final squashSha = (squash.stdout as String).trim();
+        await git(['update-ref', 'refs/heads/develop', squashSha]);
+        await git(['tag', '2.0.0', squashSha]);
+        await git(['push', 'origin', 'develop', '--tags']);
+
+        expect(await didPublish.get(directory: d, ggLog: ggLog), isTrue);
+
+        // More work on the feature branch is not released.
+        await addAndCommitSampleFile(
+          d,
+          fileName: 'more.dart',
+          content: 'void more() {}',
+          message: 'More work',
+        );
+        expect(await didPublish.get(directory: d, ggLog: ggLog), isFalse);
+        expect(
+          messages.join('\n'),
+          contains('»more.dart« differs from the release 2.0.0'),
+        );
+      });
+
+      test(
+        'resolves the default branch through gg_git\'s DefaultBranch',
+        () async {
+          // The resolver is shared: whatever it answers is the branch the
+          // last release is read from. A tag that only a »release« branch
+          // reaches is invisible from main — and found once DefaultBranch
+          // says the default branch is »release«.
+          await git(['checkout', '-b', 'release']);
+          await addAndCommitSampleFile(
+            d,
+            fileName: 'released.dart',
+            content: 'void released() {}',
+            message: 'Released work',
+          );
+          await git(['tag', '1.0.0']);
+          await git(['checkout', 'main']);
+          expect(await didPublish.get(directory: d, ggLog: ggLog), isFalse);
+          expect(messages.join('\n'), contains('No release is tagged yet'));
+          messages.clear();
+
+          final defaultBranch = MockDefaultBranch();
+          when(
+            () => defaultBranch.get(
+              directory: d,
+              ggLog: any(named: 'ggLog'),
+            ),
+          ).thenAnswer((_) async => 'release');
+          final viaMock = DidPublish(
+            ggLog: messages.add,
+            defaultBranch: defaultBranch,
+          );
+
+          // Read from »release« the last tag is 1.0.0, and HEAD differs.
+          expect(await viaMock.get(directory: d, ggLog: ggLog), isFalse);
+          expect(
+            messages.join('\n'),
+            contains('»released.dart« differs from the release 1.0.0'),
+          );
+        },
+      );
 
       test('survives a squash merge — the tag is not reachable', () async {
         // gg squash-merges the feature branch into main, so the tagged

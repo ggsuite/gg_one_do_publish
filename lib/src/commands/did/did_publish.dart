@@ -37,13 +37,20 @@ class DidPublish extends DirCommand<bool> {
     super.name = 'publish',
     super.description = 'Check if the current state was published',
     ProcessRunner? processRunner,
-  }) : _processRunner = processRunner ?? defaultProcessRunner;
+    DefaultBranch? defaultBranch,
+  }) : _processRunner = processRunner ?? defaultProcessRunner,
+       _defaultBranch = defaultBranch ?? DefaultBranch(ggLog: ggLog);
 
   /// What the user is told when the answer is no.
   static const String suggestion =
       'Not published yet. Please run »gg do publish«.';
 
   final ProcessRunner _processRunner;
+
+  /// Resolves the repository's default branch — the branch the remote
+  /// declares as `origin/HEAD`, else `main`/`master`. Shared with gg_git so
+  /// every gg command answers »which branch is the default« the same way.
+  final DefaultBranch _defaultBranch;
 
   // ...........................................................................
   @override
@@ -108,7 +115,7 @@ class DidPublish extends DirCommand<bool> {
     // ancestry says nothing here. The *content* does: the squash takes the
     // feature tree verbatim, so »is what I have here released?« is answered
     // by comparing this tree against the last released one.
-    final mainRef = await _defaultBranch(directory);
+    final mainRef = await _defaultBranchRef(directory);
     final lastTag = await _git(
       <String>['describe', '--tags', '--abbrev=0', ?mainRef],
       directory,
@@ -172,19 +179,21 @@ class DidPublish extends DirCommand<bool> {
   );
 
   // ...........................................................................
-  /// The default branch to read the last release from — the branch the
-  /// remote declares (`origin/HEAD`) first, then `origin/<main>`, then the
-  /// local branch as fallback. Null when none exists, which leaves
+  /// The ref to read the last release from: the default branch gg_git's
+  /// [DefaultBranch] resolves — the branch the remote declares
+  /// (`origin/HEAD`), else `main`/`master` — preferring its remote-tracking
+  /// ref `origin/<branch>` over the local branch, which may lag behind. Null
+  /// when the repository has no default branch at all, which leaves
   /// `git describe` to answer for HEAD.
-  Future<String?> _defaultBranch(Directory directory) async {
-    final declared = await _declaredDefaultBranch(directory);
-    for (final candidate in [
-      if (declared != null) ...['origin/$declared', declared],
-      'origin/main',
-      'origin/master',
-      'main',
-      'master',
-    ]) {
+  Future<String?> _defaultBranchRef(Directory directory) async {
+    final branch = await _defaultBranch.get(
+      directory: directory,
+      ggLog: <String>[].add,
+    );
+    if (branch.isEmpty) {
+      return null;
+    }
+    for (final candidate in ['origin/$branch', branch]) {
       final sha = await _git(
         <String>['rev-parse', '--verify', '--quiet', candidate],
         directory,
@@ -195,26 +204,6 @@ class DidPublish extends DirCommand<bool> {
       }
     }
     return null;
-  }
-
-  /// The branch `refs/remotes/origin/HEAD` points at, or null when the
-  /// remote declares no default branch.
-  Future<String?> _declaredDefaultBranch(Directory directory) async {
-    final target = await _git(
-      <String>[
-        'symbolic-ref',
-        '--quiet',
-        '--short',
-        'refs/remotes/origin/HEAD',
-      ],
-      directory,
-      allowFailure: true,
-    );
-    const prefix = 'origin/';
-    if (!target.startsWith(prefix) || target.length == prefix.length) {
-      return null;
-    }
-    return target.substring(prefix.length);
   }
 }
 
