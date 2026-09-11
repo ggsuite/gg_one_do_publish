@@ -6,5 +6,7 @@
 dependency_overrides:
   gg_merge:
     path: ../gg_merge
+  gg_one_commit:
+    path: ../gg_one_commit
   gg_one_merge:
     path: ../gg_one_merge

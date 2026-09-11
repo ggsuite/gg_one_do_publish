@@ -355,10 +355,9 @@ packages:
   gg_one_commit:
     dependency: "direct main"
     description:
-      name: gg_one_commit
-      sha256: "5aa4cae84e90a97cd558533ad1dfdaa113cfc33f779f7d3becac0f6338071fa6"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_one_commit"
+      relative: true
+    source: path
     version: "2.5.0"
   gg_one_core:
     dependency: "direct main"
