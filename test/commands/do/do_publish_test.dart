@@ -38,11 +38,16 @@ import 'package:gg_one_merge/gg_one_merge.dart';
 
 void main() {
   final messages = <String>[];
+  // The unstripped messages, for the expectations that check colors.
+  final coloredMessages = <String>[];
   // Strip the colors so the expectations stay readable. One closure
   // instance, not a function declaration: mocktail matches the ggLog
   // argument by identity, and a tear-off is not stable.
   // ignore: prefer_function_declarations_over_variables
-  final GgLog ggLog = (String msg) => messages.add(rmControls(msg));
+  final GgLog ggLog = (String msg) {
+    coloredMessages.add(msg);
+    messages.add(rmControls(msg));
+  };
   late Directory d;
   late Directory dRemote;
   late Directory Function() dMock;
@@ -2401,6 +2406,7 @@ void main() {
         mockPublishedVersion();
 
         messages.clear();
+        coloredMessages.clear();
         await doPublish.exec(
           directory: d,
           ggLog: ggLog,
@@ -2409,6 +2415,9 @@ void main() {
         );
 
         expect(messages.join('\n'), contains('✓ Tag 1.2.4 added.'));
+
+        // The check mark is dimmed together with the message.
+        expect(coloredMessages, contains(cDetail('✓ Tag 1.2.4 added.')));
       });
 
       test('warns and merges locally on an unsupported provider', () async {
@@ -3951,6 +3960,7 @@ void main() {
           '--tags',
         ], workingDirectory: d.path);
 
+        coloredMessages.clear();
         await doPublish.exec(
           directory: d,
           ggLog: ggLog,
@@ -3961,6 +3971,10 @@ void main() {
         final allMessages = messages.join('\n');
         expect(allMessages, contains('✓ Removed the local tag 1.2.4.'));
         expect(allMessages, contains('✓ Removed the remote tag 1.2.4.'));
+        expect(
+          coloredMessages,
+          contains(cDetail('✓ Removed the local tag 1.2.4.')),
+        );
         expect(allMessages, contains('✓ Tag 1.2.4 added.'));
 
         // The tag was recreated on the release commit of the default
