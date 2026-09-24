@@ -115,13 +115,13 @@ class DoPublish extends DirCommand<void> {
        _addTypeScriptVersionTag =
            addTypeScriptVersionTag ??
            AddTypeScriptVersionTag(
-             ggLog: (msg) => ggLog('✓ $msg'),
+             ggLog: (msg) => ggLog(_done(msg)),
              processWrapper: processWrapper,
            ),
        _addGitOnlyVersionTag =
            addGitOnlyVersionTag ??
            AddGitOnlyVersionTag(
-             ggLog: (msg) => ggLog('✓ $msg'),
+             ggLog: (msg) => ggLog(_done(msg)),
              processWrapper: processWrapper,
            ),
        // Like _addVersionTag: operates on the real repo, not through the
@@ -1277,7 +1277,7 @@ class DoPublish extends DirCommand<void> {
     );
     if (tagRemoved) {
       for (final message in removeMessages) {
-        ggLog('✓ $message');
+        ggLog(_done(message));
       }
     }
 
@@ -1299,14 +1299,14 @@ class DoPublish extends DirCommand<void> {
       // package with a pub.dev page needs.
       await _addVersionTag.exec(
         directory: directory,
-        ggLog: (msg) => ggLog('✓ $msg'),
+        ggLog: (msg) => ggLog(_done(msg)),
       );
       return;
     }
     final type = checkProjectType(directory);
     if (type == ProjectType.typescript) {
       // npm-only, including an npm-only hybrid: tag from package.json.
-      // ggLog with `✓` prefix is bound at construction time.
+      // ggLog with the dark `✓` prefix is bound at construction time.
       await _addTypeScriptVersionTag.exec(directory: directory);
       return;
     }
@@ -1876,6 +1876,12 @@ class DoPublish extends DirCommand<void> {
     );
   }
 }
+
+/// Prefixes a finished step's [message] with a check mark and dims both.
+///
+/// The step messages come colored already; the colors are stripped so the
+/// whole line recedes in one dark span instead of a bright mark before it.
+String _done(String message) => cDetail('✓ ${rmConsoleColors(message)}');
 
 /// Mock for [DoPublish].
 class MockDoPublish extends MockDirCommand<void> implements DoPublish {}

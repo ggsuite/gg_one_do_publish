@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Dim the check mark in front of publish step messages like 'Tag x.y.z added.'
+
 ## 2.8.3 - 2026-09-23
 
 ## 2.8.2 - 2026-09-22
