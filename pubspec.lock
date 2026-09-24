@@ -357,10 +357,10 @@ packages:
     dependency: "direct main"
     description:
       name: gg_one_commit
-      sha256: "6dc2a3e4d7fd7331813acf051a7acc382d5f5f6f4cd878b08cb1e16915e81ffe"
+      sha256: "2b022a96e1f13ba388639134007555cd869cb8611fd6c8f692566d5e461c5468"
       url: "https://pub.dev"
     source: hosted
-    version: "2.6.3"
+    version: "2.6.4"
   gg_one_core:
     dependency: "direct main"
     description:
