@@ -99,6 +99,7 @@ class DoPublish extends DirCommand<void> {
     MergeFlow? mergeFlow,
     this._publishedVersion,
     GgProcessWrapper processWrapper = const GgProcessWrapper(),
+    this._gitRetry = const GitRetry(),
     LocalBranch? localBranch,
     ConfirmDeleteFeatureBranch? confirmDeleteFeatureBranch,
     DoConfigurePublish? configurePublish,
@@ -895,6 +896,7 @@ class DoPublish extends DirCommand<void> {
   final MergeFlow _mergeFlow;
   PublishedVersion? _publishedVersion;
   final GgProcessWrapper _processWrapper;
+  final GitRetry _gitRetry;
   final LocalBranch _localBranch;
   final ConfirmDeleteFeatureBranch _confirmDeleteFeatureBranch;
   final DoConfigurePublish _configurePublish;
@@ -1189,11 +1191,15 @@ class DoPublish extends DirCommand<void> {
   Future<void> _pushDefaultBranchRef(Directory directory) async {
     final branch = await _defaultBranchName(directory);
 
-    final result = await _processWrapper.run('git', [
-      'push',
-      'origin',
-      branch,
-    ], workingDirectory: directory.path);
+    final result = await _gitRetry.run(
+      () => _processWrapper.run('git', [
+        'push',
+        'origin',
+        branch,
+      ], workingDirectory: directory.path),
+      ggLog: ggLog,
+      description: 'git push origin $branch',
+    );
     if (result.exitCode != 0) {
       throw Exception(
         cError('git push origin $branch failed: ${result.stderr}'),
@@ -1633,12 +1639,16 @@ class DoPublish extends DirCommand<void> {
       return;
     }
 
-    final result = await _runProcess(
-      'git',
-      <String>['push', 'origin', '--delete', branchName],
-      directory: directory,
+    final result = await _gitRetry.run(
+      () => _runProcess(
+        'git',
+        <String>['push', 'origin', '--delete', branchName],
+        directory: directory,
+        ggLog: ggLog,
+        verbose: verbose,
+      ),
       ggLog: ggLog,
-      verbose: verbose,
+      description: 'git push origin --delete $branchName',
     );
 
     if (result.exitCode != 0) {
