@@ -1939,6 +1939,125 @@ void main() {
         });
       });
 
+      group('and retry', () {
+        const dropped = 'Connection to github.com closed by remote host.';
+
+        /// A publish whose git retries do not wait.
+        DoPublish doPublishWithRetry() => DoPublish(
+          upgradeDeps: upgradeDeps,
+          waitUntilPublished: waitUntilPublished,
+          ggLog: ggLog,
+          publish: publish,
+          prepareNextVersion: PrepareNextVersion(
+            ggLog: ggLog,
+            publishedVersion: publishedVersion,
+          ),
+          canPublish: canPublish,
+          configurePublish: makeConfigurePublish(),
+          publishedVersion: publishedVersion,
+          processWrapper: processWrapper,
+          localBranch: localBranch,
+          confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+          mergeFlow: noPubGetMergeFlow(),
+          gitRetry: GitRetry.example,
+        );
+
+        test(
+          'the push of the merged default branch the remote dropped',
+          () async {
+            mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+            var calls = 0;
+            when(
+              () => processWrapper.run('git', [
+                'push',
+                'origin',
+                'main',
+              ], workingDirectory: d.path),
+            ).thenAnswer(
+              (_) => calls++ == 0
+                  ? Future.value(ProcessResult(0, 1, '', dropped))
+                  : Process.run('git', [
+                      'push',
+                      'origin',
+                      'main',
+                    ], workingDirectory: d.path),
+            );
+
+            await doPublishWithRetry().exec(
+              directory: d,
+              ggLog: ggLog,
+              askBeforePublishing: false,
+              deleteFeatureBranch: false,
+            );
+
+            verify(
+              () => processWrapper.run('git', [
+                'push',
+                'origin',
+                'main',
+              ], workingDirectory: d.path),
+            ).called(2);
+            expect(
+              messages.map(rmControls),
+              anyElement(
+                contains(
+                  'git push origin main failed with a transient network',
+                ),
+              ),
+            );
+            expect(
+              messages.map(rmControls),
+              anyElement(contains('Pushed main.')),
+            );
+          },
+        );
+
+        test('the deletion of the feature branch the remote dropped', () async {
+          mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+          var calls = 0;
+          when(
+            () => processWrapper.run('git', [
+              'push',
+              'origin',
+              '--delete',
+              'feat_abc',
+            ], workingDirectory: d.path),
+          ).thenAnswer(
+            (_) async => calls++ == 0
+                ? ProcessResult(0, 1, '', dropped)
+                : ProcessResult(0, 0, '', ''),
+          );
+
+          await doPublishWithRetry().exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: true,
+          );
+
+          verify(
+            () => processWrapper.run('git', [
+              'push',
+              'origin',
+              '--delete',
+              'feat_abc',
+            ], workingDirectory: d.path),
+          ).called(2);
+          expect(
+            messages.map(rmControls),
+            anyElement(
+              contains(
+                'git push origin --delete feat_abc failed with a transient',
+              ),
+            ),
+          );
+          expect(
+            messages.last,
+            contains('Deleted remote feature branch feat_abc.'),
+          );
+        });
+      });
+
       group('and throw', () {
         test('when deleting the feature branch fails', () async {
           mockPublishIsSuccessful(success: true, askBeforePublishing: false);
@@ -1969,6 +2088,16 @@ void main() {
             exception,
             'Exception: git push origin --delete feat_abc failed: Some error',
           );
+
+          // A real error is not retried.
+          verify(
+            () => processWrapper.run('git', [
+              'push',
+              'origin',
+              '--delete',
+              'feat_abc',
+            ], workingDirectory: d.path),
+          ).called(1);
         });
       });
     });

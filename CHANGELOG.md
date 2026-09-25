@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Retry the push of the merged default branch and the deletion of the remote feature branch when the connection to the remote drops (gg_git's GitRetry)
+
 ## 2.8.4 - 2026-09-24
 
 ### Changed

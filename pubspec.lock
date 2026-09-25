@@ -293,10 +293,10 @@ packages:
     dependency: "direct main"
     description:
       name: gg_git
-      sha256: "4d94c77b8128833811cf0520b8b35e3c2726c5a67e988bc4388c8a883eca3ff6"
+      sha256: de7b25e905b8ec37808abed526758abf819415565cc99cdcc863f85e8311777d
       url: "https://pub.dev"
     source: hosted
-    version: "4.4.2"
+    version: "4.5.0"
   gg_hash:
     dependency: transitive
     description:
