@@ -124,6 +124,17 @@ pub.dev **and** npm, and each manifest decides for its own side (gg_lang's
   target for a hybrid, so a `publish_to: none` Dart package keeps its CHANGELOG
   flow. One tag covers both registries, and tagging refuses when the manifests
   still disagree.
+- **Before the merge, the publish checks that origin has no tag of the
+  prepared version** (`_throwIfVersionIsTaggedOnOrigin`, via gg_publish's
+  `RemoveVersionTag.tagOnOrigin`, skipped by `--merge-only` and once `merge`
+  is done). The version bump already counts on from the highest tag on origin,
+  so such a tag can only appear later, e.g. between a failed run and its
+  `--continue`. It may be somebody else's, so nothing is deleted: the run
+  stops while main is untouched and names both ways out (delete the tag, or
+  `--restart` for the next free version). Before, the tag step tried to delete
+  such a tag after the merge and upload, and Azure DevOps refused without
+  »Force push«. The tag step still removes the tag a failed run of our own
+  left behind (`_removeVersionTagOf`), and a failed removal prints its log.
 
 <!-- helix:claude_md:start -->
 

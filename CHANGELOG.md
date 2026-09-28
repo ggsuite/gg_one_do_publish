@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.0 - 2026-09-28
+
+### Changed
+
+- Count the next version on from the highest version tag on origin and refuse to merge over a tag of the prepared version
+
 ## 2.9.0 - 2026-09-25
 
 ### Changed

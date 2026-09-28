@@ -650,6 +650,16 @@ class DoPublish extends DirCommand<void> {
       await markStepDone('prepare_version');
     }
 
+    // The version bump counts on from every version tagged on origin, so the
+    // prepared version has no tag yet — unless somebody pushed one since
+    // (e.g. between a failed run and its »--continue«). Releasing over it
+    // would have to delete a tag that is not ours, which a remote may refuse
+    // (Azure DevOps requires »Force push«) — after the merge. Stop now,
+    // while the default branch is still untouched.
+    if (!isMergeOnly && !progress.isStepDone('merge')) {
+      await _throwIfVersionIsTaggedOnOrigin(directory: directory, ggLog: ggLog);
+    }
+
     // Step 8: Record the release states and merge into the default branch.
     // The merge comes FIRST, the registry upload second: a merge that is
     // refused — a rejected pull request, a protected branch, a conflict —
@@ -1276,16 +1286,7 @@ class DoPublish extends DirCommand<void> {
     required Directory directory,
     required GgLog ggLog,
   }) async {
-    final removeMessages = <String>[];
-    final tagRemoved = await _removeVersionTag.get(
-      directory: directory,
-      ggLog: removeMessages.add,
-    );
-    if (tagRemoved) {
-      for (final message in removeMessages) {
-        ggLog(_done(message));
-      }
-    }
+    await _removeVersionTagOf(directory: directory, ggLog: ggLog);
 
     // One tag covers both registries of a hybrid: the manifests are
     // reconciled before the bump and bumped in lock-step. A manual edit that
@@ -1325,6 +1326,58 @@ class DoPublish extends DirCommand<void> {
         increment: parseVersionIncrement(_explicitVersionIncrement!),
         channel: parseReleaseChannel(_explicitChannel!),
       );
+    }
+  }
+
+  /// Throws when origin already has the tag of the version about to be
+  /// released. Deletes nothing — the tag may be somebody else's.
+  Future<void> _throwIfVersionIsTaggedOnOrigin({
+    required Directory directory,
+    required GgLog ggLog,
+  }) async {
+    final version = await _removeVersionTag.tagOnOrigin(
+      directory: directory,
+      ggLog: ggLog,
+    );
+    if (version == null) {
+      return;
+    }
+
+    ggLog(
+      cDetail(
+        '✗ Origin already has the tag $version, but no registry has '
+        'version $version.\n'
+        'Either delete the tag on origin (Azure DevOps: Git permission '
+        '»Force push«) and resume with "gg do publish --continue", or choose '
+        'the next free version with "gg do publish --restart".',
+      ),
+    );
+    throw Exception(cError('Version $version is already tagged on origin.'));
+  }
+
+  /// Removes the tag of the version about to be released, locally and on
+  /// origin. Only a tag that was really removed is reported — the normal
+  /// publish must not log a line for a tag that was never there. A failure
+  /// is logged in full, since it names what the user has to do.
+  Future<void> _removeVersionTagOf({
+    required Directory directory,
+    required GgLog ggLog,
+  }) async {
+    final messages = <String>[];
+    final bool tagRemoved;
+    try {
+      tagRemoved = await _removeVersionTag.get(
+        directory: directory,
+        ggLog: messages.add,
+      );
+    } catch (_) {
+      messages.forEach(ggLog);
+      rethrow;
+    }
+    if (tagRemoved) {
+      for (final message in messages) {
+        ggLog(_done(message));
+      }
     }
   }
 

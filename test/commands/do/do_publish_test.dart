@@ -4070,15 +4070,45 @@ void main() {
       );
     });
 
-    group('when a previous publish left the version tag behind', () {
-      test('removes it locally and on the remote and re-tags the '
-          'release commit', () async {
-        // A publish that failed after tagging leaves tag 1.2.4 on a commit
-        // this run replaces. Without removing it »add version tag« refuses
-        // ("must be greater 1.2.4") and the release stays untagged.
+    group('when a tag of the next version is already on origin', () {
+      // .......................................................................
+      Future<String> remoteMain() async {
+        final result = await Process.run('git', [
+          'rev-parse',
+          'main',
+        ], workingDirectory: dRemote.path);
+        return (result.stdout as String).trim();
+      }
+
+      // .......................................................................
+      DoPublish doPublishWith(RemoveVersionTag removeVersionTag) => DoPublish(
+        upgradeDeps: upgradeDeps,
+        waitUntilPublished: waitUntilPublished,
+        ggLog: ggLog,
+        publish: publish,
+        prepareNextVersion: PrepareNextVersion(
+          ggLog: ggLog,
+          publishedVersion: publishedVersion,
+        ),
+        canPublish: canPublish,
+        configurePublish: makeConfigurePublish(),
+        publishedVersion: publishedVersion,
+        processWrapper: processWrapper,
+        localBranch: localBranch,
+        confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+        mergeFlow: noPubGetMergeFlow(),
+        removeVersionTag: removeVersionTag,
+      );
+
+      // .......................................................................
+      test('releases the next free version and leaves a foreign tag '
+          'alone', () async {
+        // Somebody tagged 1.2.4 without publishing it — the registry still
+        // says 1.2.3. Releasing 1.2.4 would have to delete that tag, which
+        // a remote may refuse (Azure DevOps: »Force push«) after the merge.
         mockPublishIsSuccessful(success: true, askBeforePublishing: false);
 
-        final abandoned = await Process.run('git', [
+        final foreign = await Process.run('git', [
           'rev-parse',
           'HEAD',
         ], workingDirectory: d.path);
@@ -4089,7 +4119,6 @@ void main() {
           '--tags',
         ], workingDirectory: d.path);
 
-        coloredMessages.clear();
         await doPublish.exec(
           directory: d,
           ggLog: ggLog,
@@ -4098,51 +4127,141 @@ void main() {
         );
 
         final allMessages = messages.join('\n');
-        expect(allMessages, contains('✓ Removed the local tag 1.2.4.'));
-        expect(allMessages, contains('✓ Removed the remote tag 1.2.4.'));
         expect(
-          coloredMessages,
-          contains(cDetail('✓ Removed the local tag 1.2.4.')),
+          allMessages,
+          contains(
+            'Origin has the tag 1.2.4, but 1.2.3 is the latest published '
+            'version. Counting on from 1.2.4.',
+          ),
         );
-        expect(allMessages, contains('✓ Tag 1.2.4 added.'));
+        expect(allMessages, isNot(contains('Removed the')));
+        expect(allMessages, contains('✓ Tag 1.2.5 added.'));
 
-        // The tag was recreated on the release commit of the default
-        // branch, not on the abandoned one - locally as well as on the
-        // remote.
-        final releaseCommit = await Process.run('git', [
-          'rev-parse',
-          'main',
-        ], workingDirectory: d.path);
-        expect(releaseCommit.stdout, isNot(abandoned.stdout));
-
-        final tagged = await Process.run('git', [
-          'rev-list',
-          '-n',
-          '1',
-          '1.2.4',
-        ], workingDirectory: d.path);
-        expect(tagged.stdout, releaseCommit.stdout);
-
-        // The remote now carries the recreated (annotated) tag object, and no
-        // longer the lightweight tag of the abandoned commit.
+        // The foreign tag still points where its author put it.
         final remoteTag = await Process.run('git', [
           'ls-remote',
           '--tags',
           'origin',
           'refs/tags/1.2.4',
         ], workingDirectory: d.path);
-        final localTagObject = await Process.run('git', [
-          'rev-parse',
-          'refs/tags/1.2.4',
-        ], workingDirectory: d.path);
         expect(
           remoteTag.stdout as String,
-          contains((localTagObject.stdout as String).trim()),
+          contains((foreign.stdout as String).trim()),
         );
+      });
+
+      test('stops before the merge when the prepared version got '
+          'tagged meanwhile', () async {
+        // E.g. somebody pushed the tag between a failed run and its
+        // »--continue«. It may not be ours, so nothing is deleted.
+        mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+        final mainBefore = await remoteMain();
+
+        final removeVersionTag = MockRemoveVersionTag();
+        when(
+          () => removeVersionTag.tagOnOrigin(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+          ),
+        ).thenAnswer((_) async => '1.2.4');
+
+        await expectLater(
+          () => doPublishWith(removeVersionTag).exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+          ),
+          throwsA(
+            isA<Exception>().having(
+              (e) => rmC(e.toString()),
+              'message',
+              contains('Version 1.2.4 is already tagged on origin.'),
+            ),
+          ),
+        );
+
         expect(
-          remoteTag.stdout as String,
-          isNot(contains((abandoned.stdout as String).trim())),
+          messages.join('\n'),
+          contains('✗ Origin already has the tag 1.2.4'),
         );
+        expect(await remoteMain(), mainBefore);
+        verifyNever(
+          () => removeVersionTag.get(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+          ),
+        );
+        verifyNever(
+          () => publish.exec(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+            askBeforePublishing: any(named: 'askBeforePublishing'),
+            targets: any(named: 'targets'),
+            onPublished: any(named: 'onPublished'),
+          ),
+        );
+      });
+
+      group('in the tag step', () {
+        late MockRemoveVersionTag removeVersionTag;
+
+        setUp(() {
+          removeVersionTag = MockRemoveVersionTag();
+          when(
+            () => removeVersionTag.tagOnOrigin(
+              directory: any(named: 'directory'),
+              ggLog: any(named: 'ggLog'),
+            ),
+          ).thenAnswer((_) async => null);
+        });
+
+        void answerRemoval(Future<bool> Function(GgLog log) answer) =>
+            when(
+              () => removeVersionTag.get(
+                directory: any(named: 'directory'),
+                ggLog: any(named: 'ggLog'),
+              ),
+            ).thenAnswer(
+              (invocation) =>
+                  answer(invocation.namedArguments[#ggLog] as GgLog),
+            );
+
+        test('reports a removed leftover tag', () async {
+          mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+          answerRemoval((log) async {
+            log('Removed the remote tag 1.2.4.');
+            return true;
+          });
+
+          await doPublishWith(removeVersionTag).exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+          );
+
+          expect(messages, contains('✓ Removed the remote tag 1.2.4.'));
+        });
+
+        test('prints why a removal failed', () async {
+          mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+          answerRemoval((log) async {
+            log('✗ Failed to remove the remote tag 1.2.4');
+            throw Exception('Failed to remove the remote tag.');
+          });
+
+          await expectLater(
+            () => doPublishWith(removeVersionTag).exec(
+              directory: d,
+              ggLog: ggLog,
+              askBeforePublishing: false,
+              deleteFeatureBranch: false,
+            ),
+            throwsA(isA<Exception>()),
+          );
+          expect(messages, contains('✗ Failed to remove the remote tag 1.2.4'));
+        });
       });
 
       test('logs nothing about tags when none was left behind', () async {
