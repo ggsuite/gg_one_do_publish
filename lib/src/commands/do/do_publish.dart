@@ -300,13 +300,13 @@ class DoPublish extends DirCommand<void> {
       // Explicit user choice: discard the progress of the previous run. The
       // answers stay — they are what the user chose, not what the run did.
       discardProgress();
-      files = (config: files.config, state: PublishState());
+      // Read again: the answers the discarded state carried go with it.
+      files = loadRepoPublishFiles(directory);
     }
-    RepoPublishConfig? runtimeConfig =
-        configFile.existsSync() ||
-            legacyPublishConfigFile(directory).existsSync()
-        ? files.config
-        : null;
+    // The loader fills the answers publish_config.json lacks from what the
+    // state recorded — the config is deleted right before the merge, so a
+    // resume after a failed merge or upload finds its answers only there.
+    RepoPublishConfig runtimeConfig = files.config;
     PublishState runtimeState = files.state;
 
     // Step 1b: Progress that was recorded on a DIFFERENT feature branch does
@@ -331,6 +331,9 @@ class DoPublish extends DirCommand<void> {
           !onDefaultBranch) {
         discardProgress();
         runtimeState = PublishState();
+        // The answers that came with the stale state belong to that other
+        // publish as well — read the config again without them.
+        runtimeConfig = loadRepoPublishFiles(directory).config;
         final notice =
             'The progress in ${stateFile.path} belongs to the branch '
             '"$staleBranch", but the current branch is "$currentBranch". '
@@ -403,8 +406,7 @@ class DoPublish extends DirCommand<void> {
         resolvedChannel ??= config.channel;
         resolvedDelete ??= config.deleteFeatureBranch;
         resolvedPr ??= config.pr;
-      } else if (runtimeConfig != null &&
-          runtimeConfig.mergeMessage != null &&
+      } else if (runtimeConfig.mergeMessage != null &&
           (!needsIncrement || runtimeConfig.versionIncrement != null)) {
         resolvedIncrement ??= runtimeConfig.versionIncrement?.name;
         resolvedMessage ??= runtimeConfig.mergeMessage;
@@ -464,8 +466,8 @@ class DoPublish extends DirCommand<void> {
       versionIncrement: resolvedIncrement == null
           ? null
           : parseVersionIncrement(resolvedIncrement),
-      nextCommitMessage: runtimeConfig?.nextCommitMessage,
-      commits: runtimeConfig?.commits,
+      nextCommitMessage: runtimeConfig.nextCommitMessage,
+      commits: runtimeConfig.commits,
     ).save(file: configFile);
 
     var progress = PublishState(
@@ -474,6 +476,10 @@ class DoPublish extends DirCommand<void> {
       pr: resolvedPr,
       branch: featureBranch,
       doneSteps: resuming ? runtimeState.doneSteps : null,
+      // Recorded here too: the config file goes before the merge, the state
+      // survives until the publish is through.
+      mergeMessage: resolvedMessage,
+      versionIncrement: resolvedIncrement,
     );
     await progress.save(file: stateFile);
 
@@ -706,7 +712,8 @@ class DoPublish extends DirCommand<void> {
       // is about not leaving them behind rather than about a clean tree; the
       // deletion happens BEFORE the merge anyway, so a repository whose
       // gitignore entry is missing cannot land the file on main either. The
-      // state file survives — it is what a `--continue` resumes from.
+      // state file survives — it is what a `--continue` resumes from, and it
+      // carries the merge message and increment for that resume.
       if (configFile.existsSync()) {
         configFile.deleteSync();
       }
