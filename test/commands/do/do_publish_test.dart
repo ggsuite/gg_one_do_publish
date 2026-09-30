@@ -2964,6 +2964,84 @@ void main() {
         );
       });
 
+      test('a refused merge keeps its answers for the --continue', () async {
+        // publish_config.json is deleted right before the merge. The answers
+        // have to survive in the state, or the resume asks them again.
+        mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+        final failingMergeFlow = MockMergeFlow();
+        when(
+          () => failingMergeFlow.removeTicketJson(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+            verbose: any(named: 'verbose'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => failingMergeFlow.get(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+            automerge: any(named: 'automerge'),
+            local: any(named: 'local'),
+            message: any(named: 'message'),
+            verbose: any(named: 'verbose'),
+            viaPullRequest: any(named: 'viaPullRequest'),
+            deleteSourceBranch: any(named: 'deleteSourceBranch'),
+          ),
+        ).thenThrow(Exception('Merge was rejected'));
+
+        DoPublish makePublish(MergeFlow mergeFlow) => DoPublish(
+          upgradeDeps: upgradeDeps,
+          waitUntilPublished: waitUntilPublished,
+          ggLog: ggLog,
+          publish: publish,
+          prepareNextVersion: PrepareNextVersion(
+            ggLog: ggLog,
+            publishedVersion: publishedVersion,
+          ),
+          canPublish: canPublish,
+          configurePublish: makeConfigurePublish(
+            editMessage: (_) async =>
+                fail('The recorded answers apply — no prompt.'),
+          ),
+          publishedVersion: publishedVersion,
+          processWrapper: processWrapper,
+          localBranch: localBranch,
+          confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+          mergeFlow: mergeFlow,
+        );
+
+        await RepoPublishConfig(
+          mergeMessage: 'Keep this message',
+          versionIncrement: VersionIncrement.minor,
+        ).save(file: DoConfigurePublish.configFileFor(d));
+
+        await expectLater(
+          () => makePublish(failingMergeFlow).exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+          ),
+          throwsA(isA<Exception>()),
+        );
+
+        expect(DoConfigurePublish.configFileFor(d).existsSync(), isFalse);
+        final state = PublishState.tryLoad(d)!;
+        expect(state.mergeMessage, 'Keep this message');
+        expect(state.versionIncrement, 'minor');
+        expect(state.isStepDone('prepare_version'), isTrue);
+
+        await makePublish(noPubGetMergeFlow()).exec(
+          directory: d,
+          ggLog: ggLog,
+          askBeforePublishing: false,
+          resume: true,
+        );
+
+        expect(await mergeMessageBelowStateCommit(d), 'Keep this message');
+        expect(DoConfigurePublish.stateFileFor(d).existsSync(), isFalse);
+      });
+
       test('throws when the push of the merged default branch fails — '
           'before anything reaches a registry', () async {
         mockPublishIsSuccessful(success: true, askBeforePublishing: false);
@@ -3256,6 +3334,49 @@ void main() {
           ).called(1);
           // The runtime file is removed after the successful publish.
           expect(runtimeFile.existsSync(), isFalse);
+        });
+
+        test('its recorded answers are discarded along with it', () async {
+          mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+          await PublishState(
+            branch: 'feat_other',
+            doneSteps: ['prepare_version'],
+            mergeMessage: 'Stale message',
+            versionIncrement: 'major',
+          ).save(file: DoConfigurePublish.stateFileFor(d));
+          var asked = false;
+          final freshPublish = DoPublish(
+            upgradeDeps: upgradeDeps,
+            waitUntilPublished: waitUntilPublished,
+            ggLog: ggLog,
+            publish: publish,
+            prepareNextVersion: PrepareNextVersion(
+              ggLog: ggLog,
+              publishedVersion: publishedVersion,
+            ),
+            canPublish: canPublish,
+            configurePublish: makeConfigurePublish(
+              editMessage: (_) async {
+                asked = true;
+                return 'Fresh message';
+              },
+            ),
+            publishedVersion: publishedVersion,
+            processWrapper: processWrapper,
+            localBranch: localBranch,
+            confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+            mergeFlow: noPubGetMergeFlow(),
+          );
+
+          await freshPublish.exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+          );
+
+          expect(asked, isTrue);
+          expect(await mergeMessageBelowStateCommit(d), 'Fresh message');
         });
 
         test('--continue refuses and deletes the stale file', () async {
