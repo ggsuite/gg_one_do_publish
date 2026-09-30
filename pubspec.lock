@@ -366,7 +366,7 @@ packages:
       path: "../gg_one_core"
       relative: true
     source: path
-    version: "2.9.1"
+    version: "2.9.3"
   gg_one_merge:
     dependency: "direct main"
     description:
@@ -418,10 +418,10 @@ packages:
     dependency: "direct main"
     description:
       name: gg_version
-      sha256: "350c3b35124d36df8bb043f73696006c65d4134ed11ec56be27253f7d3ba785f"
+      sha256: "0e7534ddb4dfb1fb54861da02e0d2c39a36e3c8a08ff2a32c4c60d2fbf3b72f6"
       url: "https://pub.dev"
     source: hosted
-    version: "5.5.1"
+    version: "5.7.0"
   glob:
     dependency: transitive
     description:
