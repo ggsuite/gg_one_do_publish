@@ -15,7 +15,7 @@ dependencies:
   gg_git: ^4.5.1
   gg_lang: ^0.8.1
   gg_log: ^1.2.0
-  gg_merge: ^3.8.0
+  gg_merge: ^3.8.1
   gg_one_commit: ^2.7.2
   gg_one_core: ^2.10.0
   gg_one_merge: ^2.7.1
@@ -29,7 +29,7 @@ dependencies:
   pub_semver: ^2.2.1
 
 dev_dependencies:
-  dna_ggsuite: ^0.2.2
+  dna_ggsuite: ^0.2.3
   gg_capture_print: ^1.2.0
   helix: ^1.9.0
   lints: ^6.1.0
