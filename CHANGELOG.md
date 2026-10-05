@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.11.1 - 2026-10-05
+
+### Changed
+
+- gg do commit does nothing when only system commits exist
+
 ## 2.11.0 - 2026-09-30
 
 ### Changed
