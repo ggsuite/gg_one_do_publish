@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Do not ask recorded publish answers again
+
 ## 2.11.1 - 2026-10-05
 
 ### Changed
