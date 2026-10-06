@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Merge main
+
 ## 2.11.2 - 2026-10-06
 
 ### Changed
