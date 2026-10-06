@@ -394,10 +394,10 @@ packages:
     dependency: transitive
     description:
       name: gg_project_root
-      sha256: "680179904fc1d24855983ede6e8db5f0e9720f5500e65a5363eb12cb0e259c9b"
+      sha256: "99f56d3e78ce9cade4591610b6dab2332572c7b609e8e76ed99a6e81ff4eee36"
       url: "https://pub.dev"
     source: hosted
-    version: "2.2.1"
+    version: "2.2.2"
   gg_publish:
     dependency: "direct main"
     description:
