@@ -1344,6 +1344,58 @@ void main() {
             expect(headMessage, 'Programmatic merge message');
           });
 
+          test('asks only the merge message when an earlier run recorded '
+              'the increment', () async {
+            // The regression this guards: a run answered the version question
+            // and stopped at the merge message. The next run must not ask the
+            // version again.
+            mockPublishIsSuccessful(success: true, askBeforePublishing: false);
+            await RepoPublishConfig(versionIncrement: VersionIncrement.minor)
+                .save(file: DoConfigurePublish.configFileFor(d));
+
+            var editorOpened = false;
+            final doPublishWithEditor = DoPublish(
+              upgradeDeps: upgradeDeps,
+              waitUntilPublished: waitUntilPublished,
+              ggLog: ggLog,
+              publish: publish,
+              prepareNextVersion: PrepareNextVersion(
+                ggLog: ggLog,
+                publishedVersion: publishedVersion,
+              ),
+              canPublish: canPublish,
+              configurePublish: makeConfigurePublish(
+                editMessage: (_) async {
+                  editorOpened = true;
+                  return 'Only the message was open';
+                },
+              ),
+              publishedVersion: publishedVersion,
+              processWrapper: processWrapper,
+              localBranch: localBranch,
+              confirmDeleteFeatureBranch: defaultConfirmDeleteFeatureBranch,
+              mergeFlow: noPubGetMergeFlow(),
+            );
+
+            await doPublishWithEditor.exec(
+              directory: d,
+              ggLog: ggLog,
+              askBeforePublishing: false,
+              deleteFeatureBranch: false,
+            );
+
+            expect(editorOpened, isTrue);
+            verifyNever(
+              () => versionSelector.selectIncrement(
+                currentVersion: any(named: 'currentVersion'),
+                preselect: any(named: 'preselect'),
+              ),
+            );
+            expect(messages.join('\n'), contains('Tag 1.3.0 added.'));
+            final headMessage = await mergeMessageBelowStateCommit(d);
+            expect(headMessage, 'Only the message was open');
+          });
+
           test(
             'deletes the feature branch when requested explicitly',
             () async {

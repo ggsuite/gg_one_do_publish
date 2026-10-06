@@ -414,12 +414,17 @@ class DoPublish extends DirCommand<void> {
         resolvedDelete ??= runtimeState.deleteFeatureBranch;
         resolvedPr ??= runtimeState.pr;
       } else {
+        // Whatever an earlier, interrupted run recorded is a preset: once
+        // answered, a question is not asked again — only the open ones are.
         final configured = await _configurePublish.configure(
           directory: directory,
           ggLog: ggLog,
-          versionIncrement: resolvedIncrement,
-          mergeMessage: resolvedMessage,
-          deleteFeatureBranch: resolvedDelete,
+          versionIncrement:
+              resolvedIncrement ??
+              (needsIncrement ? runtimeConfig.versionIncrement?.name : null),
+          mergeMessage: resolvedMessage ?? runtimeConfig.mergeMessage,
+          deleteFeatureBranch:
+              resolvedDelete ?? runtimeState.deleteFeatureBranch,
           mergeOnly: isMergeOnly,
         );
         resolvedIncrement = configured.config.versionIncrement?.name;
