@@ -61,9 +61,9 @@
       "name": "dna-vscode",
       "package": "dna_vscode",
       "ecosystem": "pub",
-      "resolvedVersion": "0.2.3",
+      "resolvedVersion": "0.2.4",
       "via": "dna-ggsuite",
-      "hash": "0x29fdd0bc52e50e39"
+      "hash": "0x9a76a39efcd34360"
     },
     {
       "name": "dna-clean-code",
@@ -141,7 +141,7 @@
       "name": "gg-git",
       "package": "gg_git",
       "ecosystem": "pub",
-      "resolvedVersion": "4.5.2",
+      "resolvedVersion": "4.5.4",
       "via": null,
       "hash": "0x32b3537fa5495175"
     },
@@ -157,7 +157,7 @@
       "name": "gg-merge",
       "package": "gg_merge",
       "ecosystem": "pub",
-      "resolvedVersion": "3.8.2",
+      "resolvedVersion": "3.8.3",
       "via": null,
       "hash": "0x32b3537fa5495175"
     },
@@ -165,7 +165,7 @@
       "name": "gg-publish",
       "package": "gg_publish",
       "ecosystem": "pub",
-      "resolvedVersion": "4.9.1",
+      "resolvedVersion": "4.10.0",
       "via": "gg-one-core",
       "hash": "0x32b3537fa5495175"
     },
@@ -197,7 +197,7 @@
       "name": "gg-one-core",
       "package": "gg_one_core",
       "ecosystem": "pub",
-      "resolvedVersion": "2.11.1",
+      "resolvedVersion": "2.12.1",
       "via": "gg-one-commit",
       "hash": "0x32b3537fa5495175"
     },
@@ -205,7 +205,7 @@
       "name": "gg-one-commit",
       "package": "gg_one_commit",
       "ecosystem": "pub",
-      "resolvedVersion": "2.8.1",
+      "resolvedVersion": "2.8.2",
       "via": null,
       "hash": "0x32b3537fa5495175"
     },
@@ -213,7 +213,7 @@
       "name": "gg-one-merge",
       "package": "gg_one_merge",
       "ecosystem": "pub",
-      "resolvedVersion": "2.7.3",
+      "resolvedVersion": "2.7.4",
       "via": null,
       "hash": "0x32b3537fa5495175"
     },
@@ -311,7 +311,7 @@
     },
     {
       "path": ".prettierignore",
-      "hash": "0xca9871c5856573ee"
+      "hash": "0x9e5afe8bbdb91467"
     },
     {
       "path": ".prettierrc",
