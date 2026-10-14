@@ -81,6 +81,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.0"
+  cli_util:
+    dependency: transitive
+    description:
+      name: cli_util
+      sha256: "89b8801ba49f8b593fbf2d3e59efd0f566c46cd4ba6837ae2610c72b52a0f899"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.6.0"
   clock:
     dependency: transitive
     description:
@@ -117,10 +125,10 @@ packages:
     dependency: transitive
     description:
       name: coverage
-      sha256: "956a3de0725ca232ad353565a8290d3357592bf4250f6f298a185e2d949c5d3d"
+      sha256: ff89e37c19355194e279d26dafe8e4bece46c9ea63a30be4dc68214f5bc290d3
       url: "https://pub.dev"
     source: hosted
-    version: "1.15.1"
+    version: "1.16.0"
   crypto:
     dependency: transitive
     description:
@@ -364,24 +372,27 @@ packages:
   gg_one_commit:
     dependency: "direct main"
     description:
-      path: "../gg_one_commit"
-      relative: true
-    source: path
-    version: "2.8.3"
+      name: gg_one_commit
+      sha256: e488326527f8229eeae0d65ef79070e54a5c9d6e0722dce2188cf3988979ed1c
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.8.4"
   gg_one_core:
     dependency: "direct main"
     description:
-      path: "../gg_one_core"
-      relative: true
-    source: path
-    version: "2.12.1"
+      name: gg_one_core
+      sha256: "59bb651bcd4b5e5a9dfc3a361deb875c03735924e955cf08297d008c5597eef7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.13.0"
   gg_one_merge:
     dependency: "direct main"
     description:
-      path: "../gg_one_merge"
-      relative: true
-    source: path
-    version: "2.7.5"
+      name: gg_one_merge
+      sha256: "1dd7d635552ed853797dddf37d51c8f9d3b892bfa2e473528255cd1b9db8673c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.7.6"
   gg_process:
     dependency: "direct main"
     description:
