@@ -186,7 +186,8 @@ Afterwards load the review-light skill and execute it.
 
 ## Publish
 
-- Create a blog post for the current ticket
+- Run `/blog` in every repo of the ticket that has
+  `doc/guides/blog-guide.md`, the project management repo included
 - Update the index.jsonc and README.md
 - Check `mergeMessage` and `versionIncrement` in `.gg/publish_config.json`
   of each repo — `gg do publish` offers them as defaults
