@@ -485,7 +485,7 @@ void main() {
     publish = MockPublish();
     waitUntilPublished = MockWaitUntilPublished();
     upgradeDeps = MockDoUpgradeDeps();
-    upgradeDeps.mockExec(result: null);
+    upgradeDeps.mockExec(result: null, tighten: true);
     when(
       () => waitUntilPublished.get(
         directory: any(named: 'directory'),
@@ -4788,6 +4788,7 @@ void main() {
           () => upgradeDeps.exec(
             directory: d,
             ggLog: any(named: 'ggLog'),
+            tighten: true,
           ),
         ).called(1);
       });
@@ -4799,6 +4800,7 @@ void main() {
           () => upgradeDeps.exec(
             directory: any(named: 'directory'),
             ggLog: any(named: 'ggLog'),
+            tighten: true,
           ),
         ).thenAnswer((_) async {
           final pubspec = File(join(d.path, 'pubspec.yaml'));
@@ -4871,6 +4873,7 @@ void main() {
             () => upgradeDeps.exec(
               directory: any(named: 'directory'),
               ggLog: any(named: 'ggLog'),
+              tighten: any(named: 'tighten'),
             ),
           );
         },
@@ -4896,6 +4899,7 @@ void main() {
           () => upgradeDeps.exec(
             directory: any(named: 'directory'),
             ggLog: any(named: 'ggLog'),
+            tighten: any(named: 'tighten'),
           ),
         );
       });

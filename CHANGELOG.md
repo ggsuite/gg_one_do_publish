@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add the blog post of ticket gg-1
+
+### Changed
+
+- Tighten the dependency constraints explicitly on publish
+
 ## 2.11.7 - 2026-10-19
 
 ## 2.11.6 - 2026-10-16
