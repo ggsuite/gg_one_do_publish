@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Tighten the dependency constraints explicitly on publish
+
+do upgrade deps no longer tightens by default, so do publish passes tighten: true
+Upgrade dna_ggsuite to ^1.0.0
+
 ## 2.11.7 - 2026-10-19
 
 ## 2.11.6 - 2026-10-16

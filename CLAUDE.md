@@ -38,14 +38,19 @@ Note that a merge leaves no tag behind, so its work stays _unreleased_ on the ma
 ### Dependency upgrade before the release (`--no-upgrade`)
 
 Right before `can publish`, `do publish` runs gg_one_commit's `do upgrade deps`
-— »dart pub upgrade --major-versions --tighten« (and the node equivalent in a
-hybrid). A release has to ship the constraints that were actually resolved and
-tested: without this step pana rejects the upload for outdated dependencies, and
-the published manifest allows versions nobody ever built against. Its position
-is fixed by two neighbours: it runs **after** the `pubspec_overrides.yaml`
-deletion of Step 0b, so it resolves against the registry instead of the local
-working copies of a ticket workspace, and **before** `can publish`, whose pana
-sees the result.
+with `tighten: true` — »dart pub upgrade --major-versions --tighten« (and the
+node equivalent in a hybrid). A release has to ship the constraints that were
+actually resolved and tested: without this step pana rejects the upload for
+outdated dependencies, and the published manifest allows versions nobody ever
+built against. Its position is fixed by two neighbours: it runs **after** the
+`pubspec_overrides.yaml` deletion of Step 0b, so it resolves against the
+registry instead of the local working copies of a ticket workspace, and
+**before** `can publish`, whose pana sees the result.
+
+`tighten: true` has to be passed explicitly: `do upgrade deps` leaves it off by
+default, because `gg do push` and `gg do review` upgrade while the overrides
+still exist — pub would tighten against the local checkouts and crash on a
+sibling newer than the constraint. The publish is the one place that tightens.
 
 Whether anything changed is decided by the `GgState` content hash taken around
 the upgrade — not by »is the tree dirty?«, which would also answer yes for dirt

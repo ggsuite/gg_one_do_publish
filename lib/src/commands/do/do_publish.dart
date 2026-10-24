@@ -548,7 +548,14 @@ class DoPublish extends DirCommand<void> {
         ggLog: <String>[].add,
       );
 
-      await _upgradeDeps.exec(directory: directory, ggLog: ggLog);
+      // Tightening is the publish's job alone: `do upgrade deps` leaves it
+      // off, because in a ticket workspace the overrides would make pub
+      // tighten against the local checkouts.
+      await _upgradeDeps.exec(
+        directory: directory,
+        ggLog: ggLog,
+        tighten: true,
+      );
 
       final hashAfter = await _state.currentHash(
         directory: directory,
