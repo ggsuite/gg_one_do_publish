@@ -197,7 +197,7 @@
       "name": "gg-one-core",
       "package": "gg_one_core",
       "ecosystem": "pub",
-      "resolvedVersion": "2.15.0",
+      "resolvedVersion": "2.15.1",
       "via": "gg-one-commit",
       "hash": "0x32b3537fa5495175"
     },
