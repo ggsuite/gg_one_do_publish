@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.11.8 - 2026-10-29
+
+### Changed
+
+- Edit commit messages, merge messages and version increments of all repos in one JSON file in VS Code
+
 ## 2.11.7 - 2026-10-19
 
 ## 2.11.6 - 2026-10-16

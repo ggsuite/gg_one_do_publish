@@ -109,6 +109,9 @@ void main() {
     ConfirmDeleteFeatureBranch? confirmDeleteFeatureBranch,
   }) => DoConfigurePublish(
     ggLog: ggLog,
+    // No editor: the questions are asked one by one, by the stubs below.
+    editText: ({required prompt, required text, required fileName}) async =>
+        null,
     versionSelector: versionSelector,
     editMessage: editMessage ?? defaultEditMessage,
     confirmDeleteFeatureBranch:
