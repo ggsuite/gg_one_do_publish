@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.11.9 - 2026-11-06
+
+### Changed
+
+- Tighten dependencies
+
 ## 2.11.8 - 2026-10-29
 
 ### Changed
