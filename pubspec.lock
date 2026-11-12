@@ -149,10 +149,10 @@ packages:
     dependency: transitive
     description:
       name: dna_blog
-      sha256: ec676f751442e6f1b0e2423e76554341a04c11000ba743142ff884b939ed321b
+      sha256: "3f02de53c30b862b26aac473bc65e81626318184482249a98dd6090a31b58cf7"
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.0"
+    version: "0.4.0"
   dna_clean_code:
     dependency: transitive
     description:
@@ -165,18 +165,18 @@ packages:
     dependency: transitive
     description:
       name: dna_gg
-      sha256: "76daf1c5faff22e1373a81a5cd179efedb98e1582c0bd93c4031b81158fd7846"
+      sha256: fe0e9f273b7fb3ff126f0ed0b285a2a24dd57756ec9d7d175761785aba283dae
       url: "https://pub.dev"
     source: hosted
-    version: "1.5.0"
+    version: "1.6.0"
   dna_ggsuite:
     dependency: "direct dev"
     description:
       name: dna_ggsuite
-      sha256: d11f44df50f861602137f28b49519043dcab1a0606240f49b4126c355231f89b
+      sha256: "11610f633b5547a5f324a8b7218c003cc13d05e75ece92bea1f26fa1ee221cd9"
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.1"
+    version: "1.0.2"
   dna_github:
     dependency: transitive
     description:
@@ -229,10 +229,10 @@ packages:
     dependency: transitive
     description:
       name: dna_translate
-      sha256: c6c72c756b93377e6d4232c4e773fe9ed478da5570e9b1680b9bf4e4f1d345de
+      sha256: "42299a3ee0623e4c00ee260e72956523d6eb8869b41b63664bb243ca508b5da3"
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.0"
+    version: "0.4.0"
   dna_vscode:
     dependency: transitive
     description:
@@ -285,10 +285,10 @@ packages:
     dependency: "direct main"
     description:
       name: gg_changelog
-      sha256: "16322d689c6c1f747a96086aab165a5dbe51383d4cbeeb020c91f5329396222a"
+      sha256: "6c1d580011f2ff5fae1a9d680b08f34dc26c7bf995eef40afc2067eaa093e689"
       url: "https://pub.dev"
     source: hosted
-    version: "2.2.4"
+    version: "2.2.5"
   gg_console_colors:
     dependency: "direct main"
     description:
@@ -381,18 +381,18 @@ packages:
     dependency: "direct main"
     description:
       name: gg_one_commit
-      sha256: "722aed7aaa01eba94cb5e8e429eb26c542b630b5cf42aed5a34e0cde58f9cc49"
+      sha256: "8771cf1ede92410b4551e184cd507c7b399ed252c8b2261c8aaa7f01b00ed3cd"
       url: "https://pub.dev"
     source: hosted
-    version: "2.9.1"
+    version: "2.10.0"
   gg_one_core:
     dependency: "direct main"
     description:
       name: gg_one_core
-      sha256: f0ceb41e4e9ac7bd78e9da7651cceb8ca5b2ec73e850ec443ac52b672b5932ca
+      sha256: "27bdc7b817ea08c174ae410cee7d6e317981934d062d35c905550f0fbca0a4d1"
       url: "https://pub.dev"
     source: hosted
-    version: "2.16.1"
+    version: "2.17.0"
   gg_one_merge:
     dependency: "direct main"
     description:
@@ -405,10 +405,10 @@ packages:
     dependency: "direct main"
     description:
       name: gg_process
-      sha256: "871dd6ba60a00679d48a7f7e4c184470e44382fa5e61b8c0307beaf2ec4f597a"
+      sha256: e7f86750ff49a6515f85517a36b50979ab756f9b71858f4350d73c83b65bf7f0
       url: "https://pub.dev"
     source: hosted
-    version: "1.4.0"
+    version: "1.4.1"
   gg_project_root:
     dependency: transitive
     description:

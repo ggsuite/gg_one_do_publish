@@ -39,7 +39,8 @@ Note that a merge leaves no tag behind, so its work stays _unreleased_ on the ma
 
 Right before `can publish`, `do publish` runs gg_one_commit's `do upgrade deps`
 — »dart pub upgrade --major-versions --tighten« (and the node equivalent in a
-hybrid). A release has to ship the constraints that were actually resolved and
+hybrid); without `--major-versions` when the repository's `.gg/gg_rc` sets
+`do.upgrade.deps.majorVersions: false`. A release has to ship the constraints that were actually resolved and
 tested: without this step pana rejects the upload for outdated dependencies, and
 the published manifest allows versions nobody ever built against. Its position
 is fixed by two neighbours: it runs **after** the `pubspec_overrides.yaml`
@@ -50,7 +51,8 @@ sees the result.
 Whether anything changed is decided by the `GgState` content hash taken around
 the upgrade — not by »is the tree dirty?«, which would also answer yes for dirt
 the tree already carried. Only a real change is committed, as a system commit
-(»#gg: dart pub upgrade --major-versions --tighten«) carrying
+(»#gg: dart pub upgrade [--major-versions ]--tighten«, the flag named only
+when `DoUpgradeDeps.effectiveMajorVersions` says it was used) carrying
 `GgState.doCommitKey`: the upgrade rewrote the manifest, which is exactly what
 the recorded »everything is committed« hash covers and what the `did commit`
 inside `can publish` reads right afterwards. An upgrade that finds everything up
