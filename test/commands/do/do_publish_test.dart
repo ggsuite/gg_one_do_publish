@@ -4835,10 +4835,12 @@ void main() {
         );
       });
 
-      test('names no --major-versions when gg_rc.jsonc forbids it', () async {
-        repoGgRcFile(d)
+      test('names no --major-versions when .gg/gg_rc forbids it', () async {
+        GgRc.repoFileOf(d)
           ..parent.createSync(recursive: true)
-          ..writeAsStringSync('{"upgradeMajorVersions": false}');
+          ..writeAsStringSync(
+            '{"do": {"upgrade": {"deps": {"majorVersions": false}}}}',
+          );
         when(
           () => upgradeDeps.exec(
             directory: any(named: 'directory'),

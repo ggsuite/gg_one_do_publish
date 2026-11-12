@@ -6,7 +6,7 @@ Use of this source code is governed by terms that can be
 found in the LICENSE file in the root of this package.
 -->
 
-# Upgrade commit message respects .gg/gg_rc.jsonc
+# Upgrade commit message respects the repository settings
 
 ## Motivation
 
@@ -14,14 +14,14 @@ found in the LICENSE file in the root of this package.
   and records the result in a bookkeeping commit
 - That commit always read »dart pub upgrade --major-versions --tighten«
 - A repository can forbid crossing majors with
-  `upgradeMajorVersions: false` in `.gg/gg_rc.jsonc`; the commit then
-  described an upgrade that never ran
+  `do.upgrade.deps.majorVersions: false` in its `.gg/gg_rc`; the commit
+  then described an upgrade that never ran
 
 ## Strategy
 
-- Read the setting with `RepoGgRc.read` from gg_one_core, which never creates
-  the file
-- Name `--major-versions` in the message only when the setting allows it
+- Ask gg_one_commit's `DoUpgradeDeps.effectiveMajorVersions` — the same
+  decision the upgrade itself made — instead of assuming majors
+- Name `--major-versions` in the message only when it was used
 
 ## Implementation
 
@@ -33,7 +33,9 @@ found in the LICENSE file in the root of this package.
 
 ## Dependency updates
 
-- gg_one_core: `RepoGgRc`, the reader of `.gg/gg_rc.jsonc`
+- gg_one_core: `GgRc`, which reads the repository's `.gg/gg_rc`
+- gg_one_commit: `DoUpgradeDeps` follows that setting and exposes
+  `effectiveMajorVersions`
 
 ## Open Points
 

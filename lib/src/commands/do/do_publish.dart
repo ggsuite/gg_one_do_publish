@@ -1947,9 +1947,10 @@ class DoPublish extends DirCommand<void> {
 
   // ...........................................................................
   /// The message of the commit that records the upgrade. It names
-  /// »--major-versions« only when `.gg/gg_rc.jsonc` allows crossing majors.
+  /// »--major-versions« only when the repository's `.gg/gg_rc` allows
+  /// crossing majors — the setting the upgrade itself followed.
   static String _upgradeCommitMessage(Directory directory) {
-    final majors = RepoGgRc.read(directory).upgradeMajorVersions;
+    final majors = DoUpgradeDeps.effectiveMajorVersions(directory);
     final flag = majors ? '--major-versions ' : '';
     return '${ggCommitPrefix}dart pub upgrade $flag--tighten';
   }
