@@ -285,10 +285,10 @@ packages:
     dependency: "direct main"
     description:
       name: gg_changelog
-      sha256: "16322d689c6c1f747a96086aab165a5dbe51383d4cbeeb020c91f5329396222a"
+      sha256: "6c1d580011f2ff5fae1a9d680b08f34dc26c7bf995eef40afc2067eaa093e689"
       url: "https://pub.dev"
     source: hosted
-    version: "2.2.4"
+    version: "2.2.5"
   gg_console_colors:
     dependency: "direct main"
     description:
@@ -380,18 +380,16 @@ packages:
   gg_one_commit:
     dependency: "direct main"
     description:
-      name: gg_one_commit
-      sha256: "722aed7aaa01eba94cb5e8e429eb26c542b630b5cf42aed5a34e0cde58f9cc49"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_one_commit"
+      relative: true
+    source: path
     version: "2.9.1"
   gg_one_core:
     dependency: "direct main"
     description:
-      name: gg_one_core
-      sha256: f0ceb41e4e9ac7bd78e9da7651cceb8ca5b2ec73e850ec443ac52b672b5932ca
-      url: "https://pub.dev"
-    source: hosted
+      path: "../gg_one_core"
+      relative: true
+    source: path
     version: "2.16.1"
   gg_one_merge:
     dependency: "direct main"
@@ -405,10 +403,10 @@ packages:
     dependency: "direct main"
     description:
       name: gg_process
-      sha256: "871dd6ba60a00679d48a7f7e4c184470e44382fa5e61b8c0307beaf2ec4f597a"
+      sha256: e7f86750ff49a6515f85517a36b50979ab756f9b71858f4350d73c83b65bf7f0
       url: "https://pub.dev"
     source: hosted
-    version: "1.4.0"
+    version: "1.4.1"
   gg_project_root:
     dependency: transitive
     description:
