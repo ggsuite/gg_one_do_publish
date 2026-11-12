@@ -4835,6 +4835,44 @@ void main() {
         );
       });
 
+      test('names no --major-versions when gg_rc.jsonc forbids it', () async {
+        ggRcFile(d)
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync('{"upgradeMajorVersions": false}');
+        when(
+          () => upgradeDeps.exec(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+          ),
+        ).thenAnswer((_) async {
+          final pubspec = File(join(d.path, 'pubspec.yaml'));
+          await pubspec.writeAsString(
+            '${pubspec.readAsStringSync()}\n# tightened\n',
+          );
+        });
+
+        await expectLater(
+          publishStoppingAtCanPublish().exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+          ),
+          throwsA(isA<Exception>()),
+        );
+
+        final head = await Process.run('git', [
+          'log',
+          '-1',
+          '--pretty=%s',
+        ], workingDirectory: d.path);
+
+        expect(
+          head.stdout,
+          contains('${ggCommitPrefix}dart pub upgrade --tighten'),
+        );
+      });
+
       test('writes no commit when everything is up to date', () async {
         await expectLater(
           publishStoppingAtCanPublish().exec(

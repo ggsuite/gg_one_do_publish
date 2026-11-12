@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Name --major-versions in the upgrade commit only when allowed
+
 ## 2.11.9 - 2026-11-06
 
 ### Changed

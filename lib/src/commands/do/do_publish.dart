@@ -72,7 +72,7 @@ import 'package:gg_one_merge/gg_one_merge.dart';
 ///   version instead of the stable release.
 /// - `--continue` reuses `.gg/gg-publish.json` and skips the steps that are
 ///   already done; `--restart` discards config *and* progress.
-/// - `--no-upgrade` skips the »dart pub upgrade --major-versions --tighten«
+/// - `--no-upgrade` skips the »dart pub upgrade [--major-versions] --tighten«
 ///   that otherwise runs right before `can publish` — for callers like
 ///   gg_multi that upgrade the whole ticket themselves.
 class DoPublish extends DirCommand<void> {
@@ -564,8 +564,7 @@ class DoPublish extends DirCommand<void> {
         await _systemCommit.commit(
           directory: directory,
           ggLog: ggLog,
-          message:
-              '${ggCommitPrefix}dart pub upgrade --major-versions --tighten',
+          message: _upgradeCommitMessage(directory),
           userCommitMessage: readTicketDescriptionForRepo,
           stateKey: GgState.doCommitKey,
         );
@@ -1944,6 +1943,15 @@ class DoPublish extends DirCommand<void> {
       defaultsTo: false,
       negatable: false,
     );
+  }
+
+  // ...........................................................................
+  /// The message of the commit that records the upgrade. It names
+  /// »--major-versions« only when `.gg/gg_rc.jsonc` allows crossing majors.
+  static String _upgradeCommitMessage(Directory directory) {
+    final majors = GgRc.read(directory).upgradeMajorVersions;
+    final flag = majors ? '--major-versions ' : '';
+    return '${ggCommitPrefix}dart pub upgrade $flag--tighten';
   }
 }
 
