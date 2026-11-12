@@ -5,6 +5,7 @@
 ### Changed
 
 - Name --major-versions in the upgrade commit only when allowed
+- Use RepoGgRc from gg_one_core
 
 ## 2.11.9 - 2026-11-06
 

@@ -23,7 +23,7 @@
   "interfaces": {
     // "<repo-a>": "why / API"
     "uses": {
-      "gg_one_core": "GgState, GgSystemCommit, publish config, GgRc",
+      "gg_one_core": "GgState, GgSystemCommit, publish config, RepoGgRc",
       "gg_one_commit": "CanCommit, DidCommit, DoPush, DoUpgradeDeps",
       "gg_one_merge": "merge into the default branch",
       "gg_publish": "registry upload, WaitUntilPublished",

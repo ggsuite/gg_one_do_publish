@@ -19,7 +19,7 @@ found in the LICENSE file in the root of this package.
 
 ## Strategy
 
-- Read the setting with `GgRc.read` from gg_one_core, which never creates
+- Read the setting with `RepoGgRc.read` from gg_one_core, which never creates
   the file
 - Name `--major-versions` in the message only when the setting allows it
 
@@ -33,7 +33,7 @@ found in the LICENSE file in the root of this package.
 
 ## Dependency updates
 
-- gg_one_core: `GgRc`, the reader of `.gg/gg_rc.jsonc`
+- gg_one_core: `RepoGgRc`, the reader of `.gg/gg_rc.jsonc`
 
 ## Open Points
 

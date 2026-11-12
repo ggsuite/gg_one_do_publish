@@ -4836,7 +4836,7 @@ void main() {
       });
 
       test('names no --major-versions when gg_rc.jsonc forbids it', () async {
-        ggRcFile(d)
+        repoGgRcFile(d)
           ..parent.createSync(recursive: true)
           ..writeAsStringSync('{"upgradeMajorVersions": false}');
         when(
