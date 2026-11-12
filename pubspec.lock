@@ -390,7 +390,7 @@ packages:
       path: "../gg_one_core"
       relative: true
     source: path
-    version: "2.16.1"
+    version: "2.17.0"
   gg_one_merge:
     dependency: "direct main"
     description:
