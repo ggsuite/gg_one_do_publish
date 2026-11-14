@@ -644,6 +644,78 @@ void main() {
                     }
                   });
 
+                  test('and does not wait for the registry when the caller '
+                      'turns the wait off', () async {
+                    mockPublishIsSuccessful(
+                      success: true,
+                      askBeforePublishing: true,
+                    );
+                    publishedVersionValue = Version(1, 2, 3);
+                    mockPublishedVersion();
+
+                    messages.clear();
+
+                    await doPublish.exec(
+                      directory: d,
+                      ggLog: ggLog,
+                      deleteFeatureBranch: false,
+                      options: {waitUntilPublishedOption: false},
+                    );
+
+                    // The release is complete, the tag included ...
+                    expect(messages.join('\n'), contains('✓ Tag 1.2.4 added.'));
+
+                    // ... but nobody waited for the registry.
+                    verifyNever(
+                      () => waitUntilPublished.get(
+                        directory: any(named: 'directory'),
+                        ggLog: any(named: 'ggLog'),
+                      ),
+                    );
+                  });
+
+                  test(
+                    'and uploads when the caller says it is its turn',
+                    () async {
+                      mockPublishIsSuccessful(
+                        success: true,
+                        askBeforePublishing: true,
+                      );
+                      publishedVersionValue = Version(1, 2, 3);
+                      mockPublishedVersion();
+
+                      messages.clear();
+
+                      // A caller that publishes several packages at once lets
+                      // one upload through at a time: the upload is handed to
+                      // it as a body to run.
+                      const uploaded = 'Publishing was successful.';
+                      final turns = <String>[];
+                      Future<void> exclusively(
+                        Future<void> Function() upload,
+                      ) async {
+                        expect(messages.join('\n'), isNot(contains(uploaded)));
+                        turns.add('starts');
+                        await upload();
+                        expect(messages.join('\n'), contains(uploaded));
+                        turns.add('ends');
+                      }
+
+                      await doPublish.exec(
+                        directory: d,
+                        ggLog: ggLog,
+                        deleteFeatureBranch: false,
+                        options: {uploadExclusivelyOption: exclusively},
+                      );
+
+                      expect(turns, ['starts', 'ends']);
+                      expect(
+                        messages.join('\n'),
+                        contains('✓ Tag 1.2.4 added.'),
+                      );
+                    },
+                  );
+
                   group('has not been published before', () {
                     test('and publishes without asking', () async {
                       // A package that is not on its registry yet is
