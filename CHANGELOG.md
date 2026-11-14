@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add the blog post and describe the new options
+
+Add the blog post of the change
+README: publishing several repositories at once
+Tighten the dependencies
+
+### Changed
+
+- Let one DoPublish publish several repos at once
+
 ## 2.11.10 - 2026-11-12
 
 ### Changed

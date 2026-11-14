@@ -28,6 +28,27 @@ import 'package:pub_semver/pub_semver.dart';
 import 'package:gg_one_commit/gg_one_commit.dart';
 import 'package:gg_one_merge/gg_one_merge.dart';
 
+/// The option of `exec` that says whether the publish waits until the
+/// uploaded version is visible on its registries. It waits unless the
+/// option is false.
+///
+/// A caller that publishes several packages turns the wait off for a package
+/// nothing published after it depends on, and waits for all of those
+/// versions at once in the end — see [WaitUntilPublished], which can be run
+/// at any later time.
+const String waitUntilPublishedOption = 'waitUntilPublished';
+
+/// Runs [body] as soon as it is its turn and completes when [body] did.
+typedef RunExclusively = Future<void> Function(Future<void> Function() body);
+
+/// The option of `exec` that holds a [RunExclusively] for the upload to the
+/// registries. Without it the upload starts right away.
+///
+/// An upload can own the terminal: npm asks for a one-time password there.
+/// A caller that publishes several packages at the same time passes a
+/// function that lets one upload through at a time.
+const String uploadExclusivelyOption = 'uploadExclusively';
+
 /// Publishes the current directory.
 ///
 /// The release order is: merge FIRST, upload SECOND. After the version bump
@@ -195,6 +216,8 @@ class DoPublish extends DirCommand<void> {
     force: force,
     upgrade: upgrade,
     pana: options[panaOption] as bool?,
+    waitUntilPublished: options[waitUntilPublishedOption] as bool?,
+    uploadExclusively: options[uploadExclusivelyOption] as RunExclusively?,
   );
 
   @override
@@ -213,6 +236,8 @@ class DoPublish extends DirCommand<void> {
     bool? force,
     bool? upgrade,
     bool? pana,
+    bool? waitUntilPublished,
+    RunExclusively? uploadExclusively,
   }) async {
     final isVerbose = verbose ?? _verboseFromArgs;
     var usePana = pana ?? _panaFromArgs;
@@ -437,8 +462,10 @@ class DoPublish extends DirCommand<void> {
     }
     resolvedChannel ??= 'stable';
     resolvedPr ??= true;
-    _explicitVersionIncrement = resolvedIncrement;
-    _explicitChannel = resolvedChannel;
+    _resolved[directory.path] = (
+      increment: resolvedIncrement,
+      channel: resolvedChannel,
+    );
 
     // The feature branch is persisted in the runtime file: a resumed run may
     // find HEAD on the default branch already (the merge happened), so it
@@ -808,14 +835,21 @@ class DoPublish extends DirCommand<void> {
             ggLog: ggLog,
           );
 
-          await _publishToPubDevIfNeeded(
-            directory: directory,
-            ggLog: ggLog,
-            askBeforePublishing: askBeforePublishing,
-            targets: open,
-            // Awaited between the uploads, so a registry that already accepted
-            // the version is on disk before the next one can fail.
-            onPublished: (target) => markStepDone(publishRegistryStep(target)),
+          // The caller may make the upload wait for its turn, see
+          // [uploadExclusivelyOption].
+          final upload = uploadExclusively ?? (body) => body();
+          await upload(
+            () => _publishToPubDevIfNeeded(
+              directory: directory,
+              ggLog: ggLog,
+              askBeforePublishing: askBeforePublishing,
+              targets: open,
+              // Awaited between the uploads, so a registry that already
+              // accepted the version is on disk before the next one can
+              // fail.
+              onPublished: (target) =>
+                  markStepDone(publishRegistryStep(target)),
+            ),
           );
 
           await _commitLockFileIfChanged(
@@ -834,8 +868,9 @@ class DoPublish extends DirCommand<void> {
     // Idempotent (returns immediately once the version is visible), so it
     // also runs on resumed runs; packages that publish to no registry are
     // skipped inside. Nothing was uploaded in a merge-only run, so there is
-    // nothing to wait for.
-    if (!isMergeOnly) {
+    // nothing to wait for. A caller that waits itself, later and for several
+    // packages at once, turns the wait off — the tag below needs git only.
+    if (!isMergeOnly && (waitUntilPublished ?? true)) {
       await _waitUntilPublished.get(directory: directory, ggLog: ggLog);
     }
 
@@ -925,11 +960,13 @@ class DoPublish extends DirCommand<void> {
   /// targeted.
   final MainBranch _mainBranch;
 
-  /// Pre-resolved version increment; always set before the steps run.
-  String? _explicitVersionIncrement;
-
-  /// Pre-resolved release channel; always set before the steps run.
-  String? _explicitChannel;
+  /// The pre-resolved version increment and release channel of the run in
+  /// a directory; always set before the steps of that run start.
+  ///
+  /// Kept per directory and not in two fields of the command: one instance
+  /// may publish several repositories at the same time, and each run has to
+  /// read its own answers.
+  final Map<String, ({String? increment, String channel})> _resolved = {};
 
   /// The file »gg multi do add« writes when it replaces a repo's publish
   /// target with »none« for the duration of a ticket.
@@ -1329,8 +1366,8 @@ class DoPublish extends DirCommand<void> {
       // resume via the runtime .gg/gg-publish.json.
       await _addGitOnlyVersionTag.exec(
         directory: directory,
-        increment: parseVersionIncrement(_explicitVersionIncrement!),
-        channel: parseReleaseChannel(_explicitChannel!),
+        increment: parseVersionIncrement(_resolved[directory.path]!.increment!),
+        channel: parseReleaseChannel(_resolved[directory.path]!.channel),
       );
     }
   }
@@ -1449,8 +1486,9 @@ class DoPublish extends DirCommand<void> {
 
     // The increment and channel are always resolved before the steps run
     // (parameters, --config, runtime file or `do configure-publish`).
-    final increment = parseVersionIncrement(_explicitVersionIncrement!);
-    final releaseChannel = parseReleaseChannel(_explicitChannel!);
+    final resolved = _resolved[directory.path]!;
+    final increment = parseVersionIncrement(resolved.increment!);
+    final releaseChannel = parseReleaseChannel(resolved.channel);
 
     // A git merge can carry the next version's section into CHANGELOG.md
     // before it is released (gg sets »CHANGELOG.md merge=union«). Publishing
