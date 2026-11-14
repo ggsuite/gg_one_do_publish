@@ -147,4 +147,7 @@ pub.dev **and** npm, and each manifest decides for its own side (gg_lang's
   left behind (`_removeVersionTagOf`), and a failed removal prints its log.
 
 <!-- helix:claude_md:start -->
+
+@.claude/CLAUDE_dna_gg.md
+
 <!-- helix:claude_md:end -->
