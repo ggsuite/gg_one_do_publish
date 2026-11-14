@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Let one DoPublish publish several repos at once
+
+do publish waits until the registries show the upload unless the option waitUntilPublished of exec is false
+The pre-resolved increment and channel of a run are kept per directory instead of in fields of the command
+The option uploadExclusively of exec lets the caller decide when the upload to the registries starts
+
 ## 2.11.10 - 2026-11-12
 
 ### Changed
