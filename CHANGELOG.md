@@ -1,14 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2.12.0 - 2026-11-14
 
 ### Added
 
 - Add the blog post and describe the new options
-
-Add the blog post of the change
-README: publishing several repositories at once
-Tighten the dependencies
 
 ### Changed
 
