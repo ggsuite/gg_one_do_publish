@@ -551,9 +551,9 @@ class DoPublish extends DirCommand<void> {
     }
 
     // Step 5c, only with `--upgrade` (`upgrade: true`): upgrade and tighten
-    // the dependencies — »dart pub upgrade --major-versions --tighten«. Off
-    // by default: a release ships the constraints that were committed and
-    // tested, and a publish should change nothing else. When asked for, it
+    // the dependencies — »dart pub upgrade [--major-versions] --tighten«.
+    // Off by default: a release ships the constraints that were committed
+    // and tested, and a publish should change nothing else. When asked for, it
     // runs AFTER the pubspec_overrides.yaml deletion of Step 0b, so it
     // resolves against the registry and not against the local working
     // copies of a ticket workspace, and BEFORE `can publish`, whose pana
