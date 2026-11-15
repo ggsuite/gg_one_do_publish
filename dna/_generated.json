@@ -5,7 +5,7 @@
       "name": "base",
       "package": "helix",
       "ecosystem": null,
-      "resolvedVersion": "1.14.0",
+      "resolvedVersion": "1.15.2",
       "via": null,
       "hash": "0x6883da335b415f9d"
     },
@@ -83,25 +83,17 @@
     },
     {
       "name": "dna-github",
-      "package": "@ggdna/dna-github",
-      "ecosystem": "node",
-      "resolvedVersion": "0.1.1",
-      "via": "dna-gg",
-      "hash": "0xf541b93b3dc7995d"
-    },
-    {
-      "name": "dna-gg",
-      "package": "dna_gg",
+      "package": "dna_github",
       "ecosystem": "pub",
-      "resolvedVersion": "1.6.0",
+      "resolvedVersion": "0.1.1",
       "via": "dna-ggsuite",
-      "hash": "0x1be177dde62ec3b7"
+      "hash": "0xf541b93b3dc7995d"
     },
     {
       "name": "dna-ggsuite",
       "package": "dna_ggsuite",
       "ecosystem": "pub",
-      "resolvedVersion": "1.0.2",
+      "resolvedVersion": "2.0.0",
       "via": "gg-log",
       "hash": "0x309b9f27627022e1"
     },
@@ -149,7 +141,7 @@
       "name": "gg-is-flutter",
       "package": "gg_is_flutter",
       "ecosystem": "pub",
-      "resolvedVersion": "2.2.5",
+      "resolvedVersion": "2.3.0",
       "via": "gg-merge",
       "hash": "0x32b3537fa5495175"
     },
@@ -181,7 +173,7 @@
       "name": "gg-test",
       "package": "gg_test",
       "ecosystem": "pub",
-      "resolvedVersion": "3.4.0",
+      "resolvedVersion": "3.5.0",
       "via": "gg-one-core",
       "hash": "0x32b3537fa5495175"
     },
@@ -197,7 +189,7 @@
       "name": "gg-one-core",
       "package": "gg_one_core",
       "ecosystem": "pub",
-      "resolvedVersion": "2.19.0",
+      "resolvedVersion": "2.20.0",
       "via": "gg-one-commit",
       "hash": "0x32b3537fa5495175"
     },
@@ -205,7 +197,7 @@
       "name": "gg-one-commit",
       "package": "gg_one_commit",
       "ecosystem": "pub",
-      "resolvedVersion": "2.10.0",
+      "resolvedVersion": "2.10.1",
       "via": null,
       "hash": "0x32b3537fa5495175"
     },
@@ -228,27 +220,11 @@
   ],
   "claude": {
     "claudeMdInclude": null,
-    "claudeMdFromDna": true
+    "claudeMdFromDna": false
   },
-  "baseVersion": "1.14.0",
+  "baseVersion": "1.15.2",
   "baseHash": "0x6883da335b415f9d",
   "instances": [
-    {
-      "path": ".claude/CLAUDE_dna_gg.md",
-      "hash": "0xa02925c2acb04f6c"
-    },
-    {
-      "path": ".claude/hooks/pm-prompts.json",
-      "hash": "0x988e344de6ee6200"
-    },
-    {
-      "path": ".claude/hooks/pm-prompts.mjs",
-      "hash": "0x6b8fdf7bbbf7c1a5"
-    },
-    {
-      "path": ".claude/settings.json",
-      "hash": "0x6c6b768c3e99e867"
-    },
     {
       "path": ".claude/skills/blog/SKILL.md",
       "hash": "0x9d2d2f0547050310"
@@ -258,36 +234,8 @@
       "hash": "0xf145a73581189b53"
     },
     {
-      "path": ".claude/skills/gg-cleanup/SKILL.md",
-      "hash": "0x634921912309c933"
-    },
-    {
-      "path": ".claude/skills/gg-commit/SKILL.md",
-      "hash": "0x7fbe4b075588fc4d"
-    },
-    {
-      "path": ".claude/skills/gg-publish/SKILL.md",
-      "hash": "0x7ea44a57ed7d2ae8"
-    },
-    {
-      "path": ".claude/skills/gg-push/SKILL.md",
-      "hash": "0xe9bf8d2d00371cf3"
-    },
-    {
       "path": ".claude/skills/gg-review-architecture/SKILL.md",
       "hash": "0xa7a4482774cf24d5"
-    },
-    {
-      "path": ".claude/skills/gg-review/SKILL.md",
-      "hash": "0x3a4506ccd5c8e1be"
-    },
-    {
-      "path": ".claude/skills/gg-ticket/SKILL.md",
-      "hash": "0xa44f6e5ad54a6d0b"
-    },
-    {
-      "path": ".claude/skills/gg/SKILL.md",
-      "hash": "0x1eb3897cb31ec13b"
     },
     {
       "path": ".claude/skills/guide/SKILL.md",
@@ -370,24 +318,12 @@
       "hash": "0x7a61f5b227ec9067"
     },
     {
-      "path": "doc/guides/develop-guide.md",
-      "hash": "0x4c378a55b3c4773b"
-    },
-    {
-      "path": "doc/guides/develop-without-ai-guide.md",
-      "hash": "0x88551202636c10c0"
-    },
-    {
       "path": "doc/guides/dna-guides-guide.md",
       "hash": "0xcf198eaba8b70528"
     },
     {
       "path": "doc/guides/doc-guide.md",
       "hash": "0xf89e7fbaa6f27a40"
-    },
-    {
-      "path": "doc/guides/for-ai/ai-dev-guide.md",
-      "hash": "0xb3354db9fff082e9"
     },
     {
       "path": "doc/guides/for-ai/ai-review-guide.md",
@@ -403,7 +339,7 @@
     },
     {
       "path": "doc/guides/install-guide.md",
-      "hash": "0x4c0b8fb54b2c4636"
+      "hash": "0x63af66f5953969aa"
     },
     {
       "path": "doc/guides/install-guide/install-azure-cli-guide.md",
@@ -424,14 +360,6 @@
     {
       "path": "doc/guides/install-guide/install-flutter-guide.md",
       "hash": "0x883c40d890bd3d5e"
-    },
-    {
-      "path": "doc/guides/install-guide/install-gg-guide.md",
-      "hash": "0xa093431b02c398d6"
-    },
-    {
-      "path": "doc/guides/install-guide/install-gg-workspace-guide.md",
-      "hash": "0x7fca95fb9895a191"
     },
     {
       "path": "doc/guides/install-guide/install-github-cli-guide.md",
