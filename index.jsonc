@@ -14,7 +14,7 @@
   // 1-3 bullet points: the problem space.
   "domain": [
     "do publish / can publish of a single repo; --continue, --restart, --merge-only",
-    "dependency upgrade + bookkeeping commit before can publish (respects .gg/gg_rc)",
+    "dependency upgrade only with --upgrade, + bookkeeping commit before can publish (respects .gg/gg_rc)",
     "wait until visible on pub.dev / npm",
   ],
 

@@ -2,11 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Add the blog post about the opt-in upgrade
+
+index.jsonc: upgrade only with --upgrade
+
 ### Changed
 
 - Upgrade before a publish only with --upgrade
-
-gg one do publish upgrades no dependency by default
 
 ## 2.12.0 - 2026-11-14
 
