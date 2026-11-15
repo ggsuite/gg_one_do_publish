@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.13.0 - 2026-11-15
 
 ### Added
 
@@ -10,8 +10,6 @@
 
 - Upgrade before a publish only with --upgrade
 - Document --upgrade in the README
-
-Name [--major-versions] in the comment of step 5c
 
 ## 2.12.0 - 2026-11-14
 
