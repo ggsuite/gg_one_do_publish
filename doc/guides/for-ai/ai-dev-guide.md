@@ -320,6 +320,12 @@ gg one do commit
 gg do push
 ```
 
+`gg do push` merges the main branches into the feature branches, checks
+and pushes. It upgrades no dependency: new versions, major versions
+included, arrive through the nightly build (`gg do maintain --nightly`).
+Does the ticket need a newer version of a dependency right away? Raise
+its constraint as part of the change, or run `gg do push --upgrade`.
+
 ## Review
 
 Check the diff of every repo of the ticket against its scope first (see
@@ -369,3 +375,8 @@ terminal must stay outside the ticket — `-i` names the ticket instead.
 
 gg triggers the pull request merge and publishes the changes to the
 registry. Finally the version tag is created and pushed.
+
+A publish resolves the dependencies (`dart pub get`, `<pm> install`) and
+analyzes; it upgrades nothing and does not run the tests again — they
+passed at the commit. Only the constraints on repos the same ticket
+publishes change.
