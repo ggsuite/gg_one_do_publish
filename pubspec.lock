@@ -165,10 +165,10 @@ packages:
     dependency: transitive
     description:
       name: dna_gg
-      sha256: fe0e9f273b7fb3ff126f0ed0b285a2a24dd57756ec9d7d175761785aba283dae
+      sha256: a2f134caeb93fbf66d055670d4d575e13d8ec4e0441fbad870945834554bb2ee
       url: "https://pub.dev"
     source: hosted
-    version: "1.6.0"
+    version: "1.6.1"
   dna_ggsuite:
     dependency: "direct dev"
     description:
@@ -381,18 +381,18 @@ packages:
     dependency: "direct main"
     description:
       name: gg_one_commit
-      sha256: "8771cf1ede92410b4551e184cd507c7b399ed252c8b2261c8aaa7f01b00ed3cd"
+      sha256: "345b24be6ea3a7335e045837b89fbd167a3fd3543b30f9ff3ee4b1f8c1aab07c"
       url: "https://pub.dev"
     source: hosted
-    version: "2.10.0"
+    version: "2.10.1"
   gg_one_core:
     dependency: "direct main"
     description:
       name: gg_one_core
-      sha256: "31e4f9cd4428475cf9f65b60a7509c7c00202984156478705f9e7776c9c5aeb2"
+      sha256: "5fade9f261d685c7fb5cfefb66bc1106053863cb3cb53ed1b35e5538ba820774"
       url: "https://pub.dev"
     source: hosted
-    version: "2.18.0"
+    version: "2.20.0"
   gg_one_merge:
     dependency: "direct main"
     description:

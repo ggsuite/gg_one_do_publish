@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.13.0 - 2026-11-15
+
+### Added
+
+- Add the blog post about the opt-in upgrade
+
+### Changed
+
+- Upgrade before a publish only with --upgrade
+- Document --upgrade in the README
+
 ## 2.12.0 - 2026-11-14
 
 ### Added
