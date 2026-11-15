@@ -93,9 +93,10 @@ const String uploadExclusivelyOption = 'uploadExclusively';
 ///   version instead of the stable release.
 /// - `--continue` reuses `.gg/gg-publish.json` and skips the steps that are
 ///   already done; `--restart` discards config *and* progress.
-/// - `--no-upgrade` skips the »dart pub upgrade [--major-versions] --tighten«
-///   that otherwise runs right before `can publish` — for callers like
-///   gg_multi that upgrade the whole ticket themselves.
+/// - `--upgrade` runs »dart pub upgrade [--major-versions] --tighten« right
+///   before `can publish`. It is off by default: a release ships the
+///   dependency constraints that were committed and tested, and new versions
+///   of the dependencies arrive through a maintenance run of their own.
 class DoPublish extends DirCommand<void> {
   /// Constructor
   DoPublish({
@@ -549,20 +550,18 @@ class DoPublish extends DirCommand<void> {
       }
     }
 
-    // Step 5c: Upgrade and tighten the dependencies — »dart pub upgrade
-    // --major-versions --tighten«. A release must ship the constraints that
-    // were actually resolved and tested: without this step pana rejects the
-    // upload for outdated dependencies, and the published manifest allows
-    // versions nobody ever built against. It runs AFTER the
-    // pubspec_overrides.yaml deletion of Step 0b, so it resolves against the
-    // registry and not against the local working copies of a ticket
-    // workspace, and BEFORE `can publish`, whose pana sees the result.
+    // Step 5c, only with `--upgrade` (`upgrade: true`): upgrade and tighten
+    // the dependencies — »dart pub upgrade --major-versions --tighten«. Off
+    // by default: a release ships the constraints that were committed and
+    // tested, and a publish should change nothing else. When asked for, it
+    // runs AFTER the pubspec_overrides.yaml deletion of Step 0b, so it
+    // resolves against the registry and not against the local working
+    // copies of a ticket workspace, and BEFORE `can publish`, whose pana
+    // sees the result.
     //
     // A resumed run skips it for the same reason it skips `can publish`: its
     // version is bumped and possibly uploaded already, and re-resolving would
-    // rewrite a mid-publish state. gg_multi's `do publish` upgrades every
-    // ticket repo itself, in dependency order, and turns this off with
-    // »upgrade: false« instead of resolving each repo twice.
+    // rewrite a mid-publish state.
     if (!resuming && useUpgrade) {
       // The hash covers the content of the working tree, so it answers
       // whether the upgrade changed anything — and it answers it about the
@@ -1876,7 +1875,7 @@ class DoPublish extends DirCommand<void> {
 
   bool get _panaFromArgs => argResults?[panaOption] as bool? ?? true;
 
-  bool get _upgradeFromArgs => argResults?['upgrade'] as bool? ?? true;
+  bool get _upgradeFromArgs => argResults?['upgrade'] as bool? ?? false;
 
   bool get _prWasProvided => argResults?.wasParsed('pr') ?? false;
 
@@ -1918,7 +1917,7 @@ class DoPublish extends DirCommand<void> {
     argParser.addFlag(
       'upgrade',
       help: 'Upgrade and tighten the dependencies before publishing.',
-      defaultsTo: true,
+      defaultsTo: false,
       negatable: true,
     );
 

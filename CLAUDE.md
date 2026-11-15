@@ -43,18 +43,23 @@ Because a merge-only run puts the branch on the main branch _without_ releasing 
 
 Note that a merge leaves no tag behind, so its work stays _unreleased_ on the main branch — and `gg did publish` says so, because no tag covers it.
 
-### Dependency upgrade before the release (`--no-upgrade`)
+### Dependency upgrade before the release (`--upgrade`, off by default)
 
-Right before `can publish`, `do publish` runs gg_one_commit's `do upgrade deps`
-— »dart pub upgrade --major-versions --tighten« (and the node equivalent in a
-hybrid); without `--major-versions` when the repository's `.gg/gg_rc` sets
-`do.upgrade.deps.majorVersions: false`. A release has to ship the constraints that were actually resolved and
-tested: without this step pana rejects the upload for outdated dependencies, and
-the published manifest allows versions nobody ever built against. Its position
-is fixed by two neighbours: it runs **after** the `pubspec_overrides.yaml`
-deletion of Step 0b, so it resolves against the registry instead of the local
-working copies of a ticket workspace, and **before** `can publish`, whose pana
-sees the result.
+A release ships the dependency constraints that were committed and tested:
+`do publish` upgrades nothing unless asked. New versions of the dependencies
+arrive through a maintenance run of their own, not through a release. pana does not stand in the way: it still grants the points for
+up-to-date dependencies for 30 days after a new major version of a dependency
+is released, and maintenance raises it before that.
+
+With `--upgrade` (parameter `upgrade: true`), right before `can publish`, `do
+publish` runs gg_one_commit's `do upgrade deps` — »dart pub upgrade
+[--major-versions] --tighten« (and the node equivalent in a hybrid);
+`--major-versions` only when the repository's `.gg/gg_rc` (or the built-in
+default) sets `do.upgrade.deps.majorVersions: true`. Its position is fixed by
+two neighbours: it runs **after** the `pubspec_overrides.yaml` deletion of
+Step 0b, so it resolves against the registry instead of the local working
+copies of a ticket workspace, and **before** `can publish`, whose pana sees the
+result.
 
 Whether anything changed is decided by the `GgState` content hash taken around
 the upgrade — not by »is the tree dirty?«, which would also answer yes for dirt
@@ -69,10 +74,7 @@ check results of a repository nobody touched.
 
 A resumed run skips the upgrade for the same reason it skips `can publish`: its
 version is bumped and possibly uploaded, and re-resolving would rewrite a
-mid-publish state. `--no-upgrade` (parameter `upgrade: false`) turns it off;
-gg_multi's `do publish` passes it, because the ticket-wide flow upgrades every
-repo itself, in dependency order, so »--tighten« resolves against the sibling
-versions the same run published earlier.
+mid-publish state.
 
 ### Publish flow (`do_publish` + `do_configure_publish`)
 

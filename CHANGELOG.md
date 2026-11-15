@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Upgrade before a publish only with --upgrade
+
+gg one do publish upgrades no dependency by default
+
 ## 2.12.0 - 2026-11-14
 
 ### Added

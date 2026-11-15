@@ -4848,13 +4848,34 @@ void main() {
         );
       }
 
-      test('runs »dart pub upgrade --tighten« before »can publish«', () async {
+      test('does not upgrade by default', () async {
         await expectLater(
           publishStoppingAtCanPublish().exec(
             directory: d,
             ggLog: ggLog,
             askBeforePublishing: false,
             deleteFeatureBranch: false,
+          ),
+          throwsA(isA<Exception>()),
+        );
+
+        verifyNever(
+          () => upgradeDeps.exec(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+          ),
+        );
+      });
+
+      test('runs »dart pub upgrade --tighten« before »can publish« when '
+          'asked for (upgrade: true)', () async {
+        await expectLater(
+          publishStoppingAtCanPublish().exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+            upgrade: true,
           ),
           throwsA(isA<Exception>()),
         );
@@ -4888,6 +4909,7 @@ void main() {
             ggLog: ggLog,
             askBeforePublishing: false,
             deleteFeatureBranch: false,
+            upgrade: true,
           ),
           throwsA(isA<Exception>()),
         );
@@ -4900,18 +4922,15 @@ void main() {
 
         expect(
           head.stdout,
-          contains(
-            '${ggCommitPrefix}dart pub upgrade --major-versions '
-            '--tighten',
-          ),
+          contains('${ggCommitPrefix}dart pub upgrade --tighten'),
         );
       });
 
-      test('names no --major-versions when .gg/gg_rc forbids it', () async {
+      test('names --major-versions when .gg/gg_rc allows it', () async {
         GgRc.repoFileOf(d)
           ..parent.createSync(recursive: true)
           ..writeAsStringSync(
-            '{"do": {"upgrade": {"deps": {"majorVersions": false}}}}',
+            '{"do": {"upgrade": {"deps": {"majorVersions": true}}}}',
           );
         when(
           () => upgradeDeps.exec(
@@ -4931,6 +4950,7 @@ void main() {
             ggLog: ggLog,
             askBeforePublishing: false,
             deleteFeatureBranch: false,
+            upgrade: true,
           ),
           throwsA(isA<Exception>()),
         );
@@ -4943,7 +4963,10 @@ void main() {
 
         expect(
           head.stdout,
-          contains('${ggCommitPrefix}dart pub upgrade --tighten'),
+          contains(
+            '${ggCommitPrefix}dart pub upgrade --major-versions '
+            '--tighten',
+          ),
         );
       });
 
@@ -4954,6 +4977,7 @@ void main() {
             ggLog: ggLog,
             askBeforePublishing: false,
             deleteFeatureBranch: false,
+            upgrade: true,
           ),
           throwsA(isA<Exception>()),
         );
@@ -4968,30 +4992,27 @@ void main() {
         expect(log.stdout, isNot(contains('dart pub upgrade')));
       });
 
-      test(
-        'is skipped when the caller upgrades itself (upgrade: false)',
-        () async {
-          await expectLater(
-            publishStoppingAtCanPublish().exec(
-              directory: d,
-              ggLog: ggLog,
-              askBeforePublishing: false,
-              deleteFeatureBranch: false,
-              upgrade: false,
-            ),
-            throwsA(isA<Exception>()),
-          );
+      test('is skipped with upgrade: false', () async {
+        await expectLater(
+          publishStoppingAtCanPublish().exec(
+            directory: d,
+            ggLog: ggLog,
+            askBeforePublishing: false,
+            deleteFeatureBranch: false,
+            upgrade: false,
+          ),
+          throwsA(isA<Exception>()),
+        );
 
-          verifyNever(
-            () => upgradeDeps.exec(
-              directory: any(named: 'directory'),
-              ggLog: any(named: 'ggLog'),
-            ),
-          );
-        },
-      );
+        verifyNever(
+          () => upgradeDeps.exec(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+          ),
+        );
+      });
 
-      test('is turned off by --no-upgrade on the command line', () async {
+      test('is off on the command line unless --upgrade is given', () async {
         final runner = CommandRunner<void>('gg', 'gg')
           ..addCommand(publishStoppingAtCanPublish());
 
@@ -5000,7 +5021,6 @@ void main() {
             'publish',
             '-i',
             d.path,
-            '--no-upgrade',
             '--no-ask-before-publishing',
             '--no-delete-feature-branch',
           ]),
@@ -5013,6 +5033,30 @@ void main() {
             ggLog: any(named: 'ggLog'),
           ),
         );
+      });
+
+      test('is turned on by --upgrade on the command line', () async {
+        final runner = CommandRunner<void>('gg', 'gg')
+          ..addCommand(publishStoppingAtCanPublish());
+
+        await expectLater(
+          runner.run(<String>[
+            'publish',
+            '-i',
+            d.path,
+            '--upgrade',
+            '--no-ask-before-publishing',
+            '--no-delete-feature-branch',
+          ]),
+          throwsA(isA<Exception>()),
+        );
+
+        verify(
+          () => upgradeDeps.exec(
+            directory: any(named: 'directory'),
+            ggLog: any(named: 'ggLog'),
+          ),
+        ).called(1);
       });
     });
 
